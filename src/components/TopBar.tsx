@@ -1,7 +1,7 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
 
-export type TabKey = 'economics' | 'radar' | 'scoping' | 'mcp';
+export type TabKey = 'economics' | 'radar' | 'pov' | 'scoping' | 'mcp';
 
 interface TopBarProps {
   activeTab: TabKey;
@@ -12,6 +12,7 @@ interface TopBarProps {
 const NAV_ITEMS: { key: TabKey; label: string }[] = [
   { key: 'economics', label: 'Unit Economics' },
   { key: 'radar', label: 'AI Radar' },
+  { key: 'pov', label: 'POV / POC' },
   { key: 'scoping', label: 'Deal Scoping' },
   { key: 'mcp', label: 'MCP Inspector' },
 ];

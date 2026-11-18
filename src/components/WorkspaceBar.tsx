@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, Moon, Printer, Sun } from 'lucide-react';
+import { Bookmark, Moon, Presentation, Printer, Sun } from 'lucide-react';
 import { VERTICAL_PRESETS, VerticalKey, VerticalPreset } from '../data/verticalPresets';
 import { InfoTooltip } from './InfoTooltip';
 
@@ -11,6 +11,8 @@ interface WorkspaceBarProps {
   onToggleTheme: () => void;
   onPrint: () => void;
   onOpenScenarios: () => void;
+  onDownloadDeck: () => void;
+  isExportingDeck: boolean;
   savedCount: number;
 }
 
@@ -24,6 +26,8 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
   onToggleTheme,
   onPrint,
   onOpenScenarios,
+  onDownloadDeck,
+  isExportingDeck,
   savedCount,
 }) => {
   return (
@@ -91,8 +95,16 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
           </div>
         </div>
 
-        {/* Right: Scenarios, Print & Theme Toggle */}
+        {/* Right: Scenarios, Deck, Print & Theme Toggle */}
         <div className="flex items-center gap-2 shrink-0">
+          <InfoTooltip
+            label="Scenarios, PowerPoint Deck & PDF"
+            description="Save local deal snapshots or copy shareable ?s= URLs, download an editable 10-slide Value Prop PowerPoint (.pptx) configured with your numbers, or print any tab as an executive PDF."
+            tcoImpact="Lets partners configure once in discovery and immediately walk out with CFO, Radar, and POV deliverables."
+            placement="bottom"
+            align="right"
+          />
+
           <button
             type="button"
             onClick={onOpenScenarios}
@@ -100,6 +112,17 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
           >
             <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
             Scenarios{savedCount > 0 ? ` (${savedCount})` : ''}
+          </button>
+
+          <button
+            type="button"
+            onClick={onDownloadDeck}
+            disabled={isExportingDeck}
+            title="Download a 10-slide editable PowerPoint presentation configured with your live deal numbers, competitor comparison, POV charter, and feature walkthrough"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 transition-colors hover:bg-teal-100 disabled:opacity-60 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Presentation className="h-3.5 w-3.5" aria-hidden="true" />
+            {isExportingDeck ? 'Building Deck...' : 'Download Deck (.pptx)'}
           </button>
 
           <button

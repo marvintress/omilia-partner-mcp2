@@ -72,6 +72,34 @@ export const COMPETITOR_PROFILES: Record<CompetitorArchetype, CompetitorProfile>
   },
 };
 
+export type PovBackendMode = 'sandbox_mock' | 'nonprod_api' | 'talkguard_sip';
+export type PovCommercialModel = 'co_sell_free' | 'funded_credited' | 'paid_pilot';
+export type PovScopeStrategy = 'hybrid' | 'top_right' | 'bottom_right';
+
+export interface PovConfig {
+  scopeStrategy: PovScopeStrategy;
+  intentCount: number;
+  backendMode: PovBackendMode;
+  commercialModel: PovCommercialModel;
+  nluTargetPct: number;
+  taskTargetPct: number;
+  latencyTargetMs: number;
+  includeTalkguardTest: boolean;
+  povFeeUsd: number;
+}
+
+export const DEFAULT_POV_CONFIG: PovConfig = {
+  scopeStrategy: 'hybrid',
+  intentCount: 2,
+  backendMode: 'sandbox_mock',
+  commercialModel: 'funded_credited',
+  nluTargetPct: 96,
+  taskTargetPct: 90,
+  latencyTargetMs: 1000,
+  includeTalkguardTest: true,
+  povFeeUsd: 20000,
+};
+
 export interface RoiPreset {
   callVolume: number;
   baseContainment: number;

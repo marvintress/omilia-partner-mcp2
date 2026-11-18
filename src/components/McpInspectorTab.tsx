@@ -12,7 +12,7 @@ import {
   formatCurrencyCompact,
   getQuadrantMeta,
   HleeResult,
-  isTopRightQuadrant,
+  isHighFeasibilityQuadrant,
   RoiInputs,
   RoiResults,
 } from '../utils/calculations';
@@ -104,7 +104,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
     let requestPayload: Record<string, unknown> = {};
     let simulatedResponse: Record<string, unknown> = {};
 
-    const includedList = useCases.filter((u) => isTopRightQuadrant(u) && u.included !== false);
+    const includedList = useCases.filter((u) => isHighFeasibilityQuadrant(u) && u.included !== false);
 
     if (action === 'tools/list') {
       requestPayload = {
@@ -289,7 +289,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
           },
           aiRadarPortfolio: {
             totalPlottedUseCases: useCases.length,
-            phase1TopRightIncludedCount: includedList.length,
+            phase1HighFeasIncludedCount: includedList.length,
             phase1IncludedUseCases: includedList.map((u) => ({
               name: u.name,
               feasibility: u.feas,
@@ -302,7 +302,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
               quadrant: getQuadrantMeta(u.feas, u.imp).label,
               feasibility: u.feas,
               impact: u.imp,
-              includedInPhase1Sow: isTopRightQuadrant(u) && u.included !== false,
+              includedInPhase1Sow: isHighFeasibilityQuadrant(u) && u.included !== false,
             })),
           },
         },
@@ -482,9 +482,16 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
           <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <div>
-                <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                  Voice Latency Budget Waterfall
-                </h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    Voice Latency Budget Waterfall
+                  </h3>
+                  <InfoTooltip
+                    label="Voice Latency Budget Waterfall"
+                    description="Contrasts Omilia's Parallel Async MCP fan-out + <45ms Lexis TTS against multi-hop sequential chains (External ASR -> Frontier LLM -> APIs -> External TTS) relative to the 1,200ms caller hang-up line."
+                    tcoImpact="Eliminates the 1.8s–3.5s dead air that causes caller barge-in failures and depresses competitor containment by 6–11 points."
+                  />
+                </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Measured against the 1,200ms Caller Hang-Up Threshold · {preset.shortName} Stack
                 </p>
@@ -602,9 +609,16 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
         <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div>
-              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                End-to-End Live Call Turn Replay
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  End-to-End Live Call Turn Replay
+                </h2>
+                <InfoTooltip
+                  label="End-to-End Call Turn Replay"
+                  description="Steps through a real vertical voice turn from 8kHz Speech Capture to Parallel Async MCP Fan-Out, Lexis Native TTS playback, and SIP UUI warm-transfer context."
+                  tcoImpact="Demonstrates both automated resolution speed and CoPilot ACW savings if a call escalates to a human agent."
+                />
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {scenario.intentName} · {totalOmiliaMs}ms Omilia vs. {seqSumMs.toLocaleString()}ms {comp.shortLabel}
               </p>
@@ -727,9 +741,16 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
         <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div>
-              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                Glass Box JSON-RPC 2.0 Audit Wire Trace
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  Glass Box JSON-RPC 2.0 Audit Wire Trace
+                </h2>
+                <InfoTooltip
+                  label="Glass Box JSON-RPC 2.0 Audit Trace"
+                  description="Inspects the exact schema-validated request/response payloads exchanged between OCP (MCP Client) and customer-hosted MCP servers with PII masking."
+                  tcoImpact="Gives InfoSec & Architecture Review Boards verifiable proof that customer PII never leaves the sovereign perimeter."
+                />
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Schema-validated · RBAC-scoped · Zero third-party LLM egress
               </p>

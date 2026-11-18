@@ -3,6 +3,7 @@ import {
   CompetitorArchetype,
   DealMetadata,
   PartnerMotion,
+  PovConfig,
   SovereigntyTier,
   UseCase,
   VerticalKey,
@@ -18,6 +19,7 @@ export interface ScenarioPayload {
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
   competitorArchetype?: CompetitorArchetype;
+  povConfig?: PovConfig;
   psDayRate: number;
   dealMeta: DealMetadata;
 }

@@ -8,9 +8,10 @@ import {
   VerticalPreset,
 } from '../data/verticalPresets';
 import {
+  getQuadrantMeta,
   getUseCasePsDays,
   HleeResult,
-  isTopRightQuadrant,
+  isHighFeasibilityQuadrant,
 } from '../utils/calculations';
 import { InfoTooltip } from './InfoTooltip';
 
@@ -51,8 +52,8 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
   onRestoreDefaults,
   onOpenBrief,
 }) => {
-  const topRightUseCases = useCases.filter(isTopRightQuadrant);
-  const includedCount = topRightUseCases.filter((u) => u.included !== false).length;
+  const highFeasUseCases = useCases.filter(isHighFeasibilityQuadrant);
+  const includedCount = highFeasUseCases.filter((u) => u.included !== false).length;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -132,12 +133,12 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="inline-flex items-center gap-1.5">
                   <label htmlFor="inpIntentCount" className="font-medium text-slate-700 dark:text-slate-300">
-                    Phase 1 Bounded Intents (Top-Right Radar)
+                    Phase 1 Bounded Intents (High-Feasibility Radar)
                   </label>
                   <InfoTooltip
                     label="Phase 1 Bounded Intents"
-                    description="Synced with Top-Right AI Radar checkboxes. Adds 8 base PS days plus 2–3 PS days per intent depending on feasibility."
-                    tcoImpact="Keeps Phase 1 scoped to the top 3–5 volume drivers (80/20 rule) so TCO payback begins in 4–6 weeks without PS overruns."
+                    description="Synced with High-Feasibility (Top-Right + Bottom-Right, ≥50F) AI Radar checkboxes. Adds 8 base PS days plus 2–3 PS days per intent."
+                    tcoImpact="Keeps Phase 1 scoped to high-feasibility volume & quick-win drivers (80/20 rule) so TCO payback begins in 4–6 weeks without PS overruns."
                   />
                 </span>
                 <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
@@ -148,13 +149,13 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
                 id="inpIntentCount"
                 type="range"
                 min={0}
-                max={Math.max(1, topRightUseCases.length)}
+                max={Math.max(1, highFeasUseCases.length)}
                 step={1}
                 value={includedCount}
                 onChange={(e) => onSetIntentCount(Number(e.target.value))}
               />
               <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                Includes only Top-Right Quadrant (Feasibility ≥50 &amp; Impact ≥50) intents from AI Radar 2.0.
+                Includes High-Feasibility (≥50F: Top-Right Immediate Funding + Bottom-Right Quick Wins) from AI Radar 2.0.
               </p>
             </div>
 
@@ -261,9 +262,16 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
         <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div>
-              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                HLEE Effort Estimate &amp; Co-Sell Positioning
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  HLEE Effort Estimate &amp; Co-Sell Positioning
+                </h2>
+                <InfoTooltip
+                  label="HLEE Effort Estimate"
+                  description="High-Level Effort Estimate computing Phase 1 delivery weeks and PS Days from your active High-Feasibility Radar intents, Sovereignty tier, and API readiness."
+                  tcoImpact="Multiplied by PS Blended Day Rate to compute the exact Phase 1 implementation cost inside Unit Economics."
+                />
+              </div>
               <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
                 {hlee.positioningHook}
               </p>
@@ -302,24 +310,32 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
           <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div>
-                <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                  Included Phase 1 Use Cases (Top-Right Radar Quadrant)
-                </h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    Included Phase 1 / Hybrid Use Cases (Top-Right + Bottom-Right)
+                  </h3>
+                  <InfoTooltip
+                    label="Phase 1 / Hybrid Scope List"
+                    description="Lists every workflow scoring ≥50 Feasibility across Top-Right Immediate Funding and Bottom-Right Quick Wins (RAG/FAQ). Toggle checkboxes to add or remove items from Phase 1."
+                    tcoImpact="Each active workflow adds +2 PS Days (≥75F) or +3 PS Days (50–74F) to Phase 1 HLEE."
+                  />
+                </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                  {includedCount} of {topRightUseCases.length} Top-Right intents active in SOW
+                  {includedCount} of {highFeasUseCases.length} high-feasibility (≥50F) intents active in SOW
                 </p>
               </div>
             </div>
 
-            {topRightUseCases.length === 0 ? (
+            {highFeasUseCases.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-300 p-5 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                No Top-Right Quadrant (Feasibility ≥50 &amp; Impact ≥50) use cases currently plotted on AI Radar 2.0.
+                No High-Feasibility (Feasibility ≥50: Top-Right or Bottom-Right) use cases currently plotted on AI Radar 2.0.
               </div>
             ) : (
               <div className="divide-y divide-slate-100 border-t border-b border-slate-100 dark:divide-slate-800 dark:border-slate-800 max-h-60 overflow-y-auto">
-                {topRightUseCases.map((uc) => {
+                {highFeasUseCases.map((uc) => {
                   const isIncluded = uc.included !== false;
                   const psDays = getUseCasePsDays(uc);
+                  const quadLabel = getQuadrantMeta(uc.feas, uc.imp).label;
                   return (
                     <div
                       key={uc.id}
@@ -343,7 +359,7 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
                             {uc.name}
                           </div>
                           <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-                            {uc.runtime}
+                            {quadLabel} · {uc.runtime}
                           </div>
                         </div>
                       </label>
@@ -393,9 +409,16 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
         {/* Partner vs. Omilia RACI Responsibility Matrix */}
         <section className="rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
           <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-              Partner vs. Omilia RACI Responsibility Matrix
-            </h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                Partner vs. Omilia RACI Responsibility Matrix
+              </h2>
+              <InfoTooltip
+                label="Partner vs. Omilia RACI"
+                description="Defines explicit delivery accountability between Omilia, the Partner SE/Practice, and the Enterprise Client for every workstream."
+                tcoImpact="Prevents change-order friction and margin erosion by locking ownership of SIP, NLU bootstrapping, and backend MCP facades."
+              />
+            </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Clear delivery boundaries to prevent scope creep
             </p>

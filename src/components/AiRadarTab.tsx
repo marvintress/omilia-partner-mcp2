@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Copy, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react';
 import { UseCase, VerticalPreset } from '../data/verticalPresets';
-import { getQuadrantMeta, isTopRightQuadrant } from '../utils/calculations';
+import { getQuadrantMeta, isHighFeasibilityQuadrant } from '../utils/calculations';
 import { InfoTooltip } from './InfoTooltip';
 
 interface AiRadarTabProps {
@@ -44,7 +44,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
   const selectedUc = useCases.find((u) => u.id === selectedId) ?? useCases[0] ?? null;
 
   const filteredUseCases = useCases.filter((uc) => {
-    const inPhase1 = isTopRightQuadrant(uc) && uc.included !== false;
+    const inPhase1 = isHighFeasibilityQuadrant(uc) && uc.included !== false;
     if (filter === 'phase1') return inPhase1;
     if (filter === 'deferred') return !inPhase1;
     return true;
@@ -82,16 +82,17 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
   };
 
   const getPinStrokeColor = (uc: UseCase) => {
-    if (isTopRightQuadrant(uc)) {
-      return uc.included !== false ? '#0d9488' : '#64748b';
-    }
     const q = getQuadrantMeta(uc.feas, uc.imp);
+    if (isHighFeasibilityQuadrant(uc) && uc.included === false) {
+      return '#64748b';
+    }
+    if (q.tone === 'teal') return '#0d9488';
     if (q.tone === 'amber') return '#d97706';
     if (q.tone === 'blue') return '#0284c7';
     return '#e11d48';
   };
 
-  const includedCount = useCases.filter((u) => isTopRightQuadrant(u) && u.included !== false).length;
+  const includedCount = useCases.filter((u) => isHighFeasibilityQuadrant(u) && u.included !== false).length;
 
   const clientToScores = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -116,11 +117,19 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div>
-                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  AI Radar 2.0: Feasibility &amp; Data Maturity vs. Strategic Impact
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                    AI Radar 2.0: Feasibility &amp; Data Maturity vs. Strategic Impact
+                  </h2>
+                  <InfoTooltip
+                    label="AI Radar 2.0 Matrix"
+                    description="Drag any pin across quadrants to re-score Feasibility & Impact live. Both Top-Right Immediate Funding (≥50F/≥50I) and Bottom-Right Quick Wins (RAG/FAQ ≥50F) are eligible for Hybrid POV & Phase 1 SOW."
+                    tcoImpact="Pins dragged below 50 Feasibility automatically defer to Phase 2+, removing PS overruns from Phase 1 HLEE."
+                    placement="bottom"
+                  />
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {preset.name} · {useCases.length} plotted ({includedCount} in Phase 1 SOW) · Drag pins to re-score
+                  {preset.name} · {useCases.length} plotted ({includedCount} in Phase 1 / Hybrid SOW) · Drag pins to re-score
                 </p>
               </div>
               <div className="no-print flex items-center gap-2 shrink-0">
@@ -158,6 +167,14 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   width={padL + plotW - midX}
                   height={midY - padT}
                   className="fill-teal-500/8 dark:fill-teal-400/10"
+                />
+                {/* Bottom-Right Quick Wins (Hybrid-Eligible High Feasibility) */}
+                <rect
+                  x={midX}
+                  y={midY}
+                  width={padL + plotW - midX}
+                  height={padT + plotH - midY}
+                  className="fill-sky-500/6 dark:fill-sky-400/8"
                 />
                 {/* Top-Left Training Wheels Zone */}
                 <rect
@@ -241,7 +258,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   y={padT + plotH - 10}
                   className="fill-sky-700 dark:fill-sky-400 text-[11px] font-medium"
                 >
-                  Quick Wins (Grounded RAG / FAQ)
+                  Quick Wins · Hybrid-Eligible (RAG / FAQ ≥50F)
                 </text>
                 <text
                   x={padL + 12}
@@ -276,8 +293,8 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   const cy = toY(uc.imp);
                   const isSelected = selectedUc?.id === uc.id;
                   const isHovered = hoveredId === uc.id;
-                  const inTopRight = isTopRightQuadrant(uc);
-                  const isExcluded = inTopRight && uc.included === false;
+                  const inHighFeas = isHighFeasibilityQuadrant(uc);
+                  const isExcluded = inHighFeas && uc.included === false;
                   const color = getPinStrokeColor(uc);
                   const alignRight = uc.feas > 74;
                   const labelX = alignRight ? cx - 12 : cx + 12;
@@ -465,12 +482,18 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
           {/* Runtime & Rollout Inspector */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4 dark:border-slate-800">
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                Runtime &amp; Rollout Inspector
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <span>Runtime &amp; Rollout Inspector</span>
+                <InfoTooltip
+                  label="Runtime & Rollout Inspector"
+                  description="Shows the selected intent's Omilia Runtime Tier, Phased 'Training Wheels' rollout steps, and mandatory Glass Box & HITL governance gates."
+                  tcoImpact="High-Feasibility intents (Top-Right + Bottom-Right) toggle directly in/out of Phase 1 SOW and Hybrid POV plans."
+                  placement="bottom"
+                />
               </div>
               {selectedUc && (
                 <div className="no-print flex items-center gap-2">
-                  {isTopRightQuadrant(selectedUc) && (
+                  {isHighFeasibilityQuadrant(selectedUc) && (
                     <button
                       type="button"
                       onClick={() => onToggleInclude(selectedUc.id)}
@@ -480,7 +503,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                           : 'border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                       }`}
                     >
-                      {selectedUc.included !== false ? 'Included in Phase 1 SOW' : 'Excluded (Click to Include)'}
+                      {selectedUc.included !== false ? 'Included in Phase 1 / Hybrid' : 'Excluded (Click to Include)'}
                     </button>
                   )}
                   <button
@@ -619,13 +642,13 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                     Vertical Use-Case Portfolio
                   </h3>
                   <InfoTooltip
-                    label="Phase 1 SOW Scope Checkboxes"
-                    description="Checkboxes toggle whether Top-Right Quadrant drivers (≥50F & ≥50I) are included in Phase 1 SOW delivery."
-                    tcoImpact="Including high-impact intents unlocks containment TCO savings sooner while adjusting Phase 1 PS Days in Deal Scoping."
+                    label="Phase 1 / Hybrid SOW Checkboxes"
+                    description="Checkboxes toggle whether High-Feasibility drivers (Top-Right Immediate Funding + Bottom-Right Quick Wins, ≥50F) are included in Phase 1 & Hybrid POV scope."
+                    tcoImpact="Including high-feasibility Top-Right and Bottom-Right intents accelerates Day-1 deflection and feeds POV / Phase 1 PS Days."
                   />
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                  {useCases.length} intents · {includedCount} scoped in Phase 1
+                  {useCases.length} intents · {includedCount} scoped in Phase 1 / Hybrid
                 </p>
               </div>
 
@@ -633,7 +656,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                 {(
                   [
                     { key: 'all', label: 'All' },
-                    { key: 'phase1', label: 'Phase 1' },
+                    { key: 'phase1', label: 'Phase 1 / Hybrid' },
                     { key: 'deferred', label: 'Phase 2+' },
                   ] as { key: PortfolioFilter; label: string }[]
                 ).map((tab) => (
@@ -660,8 +683,8 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                 </div>
               ) : (
                 filteredUseCases.map((uc) => {
-                  const inTopRight = isTopRightQuadrant(uc);
-                  const isIncluded = inTopRight && uc.included !== false;
+                  const inHighFeas = isHighFeasibilityQuadrant(uc);
+                  const isIncluded = inHighFeas && uc.included !== false;
                   const isSelected = selectedUc?.id === uc.id;
                   const q = getQuadrantMeta(uc.feas, uc.imp);
 
@@ -676,7 +699,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        {inTopRight ? (
+                        {inHighFeas ? (
                           <input
                             type="checkbox"
                             checked={isIncluded}
@@ -688,14 +711,14 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                         ) : (
                           <span
                             className="w-3.5 text-center text-[11px] text-slate-400 shrink-0"
-                            title="Outside Top-Right Quadrant"
+                            title="Feasibility <50 (Phase 2/3)"
                           >
                             —
                           </span>
                         )}
                         <span
                           className={`truncate text-xs font-medium ${
-                            inTopRight && !isIncluded
+                            inHighFeas && !isIncluded
                               ? 'line-through text-slate-400 dark:text-slate-500'
                               : 'text-slate-800 dark:text-slate-200'
                           }`}
@@ -765,12 +788,12 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
           <tbody className="divide-y divide-slate-200">
             {useCases.map((uc) => {
               const q = getQuadrantMeta(uc.feas, uc.imp);
-              const isTopRight = isTopRightQuadrant(uc);
+              const isHighFeas = isHighFeasibilityQuadrant(uc);
               const status =
-                isTopRight && uc.included !== false
-                  ? 'Phase 1 SOW Included'
-                  : isTopRight
-                  ? 'Top-Right (Excluded)'
+                isHighFeas && uc.included !== false
+                  ? 'Phase 1 / Hybrid SOW Included'
+                  : isHighFeas
+                  ? 'High-Feasibility (Excluded)'
                   : 'Phase 2/3';
               return (
                 <tr key={uc.id}>

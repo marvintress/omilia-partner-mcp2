@@ -91,8 +91,14 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
       <section aria-label="Key Financial and Capacity Metrics">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <div className="p-5">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              Annual Net Savings
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span>Annual Net Savings</span>
+              <InfoTooltip
+                label="Annual Net Savings"
+                description="Year-1 annualized run-rate savings comparing your Legacy Human + IVR baseline against Omilia OCP at current volume and peak surge."
+                tcoImpact="Driven upward by Target Containment, Loaded Human Cost/Call, TalkGuard, CoPilot, and Peak Surge."
+                placement="bottom"
+              />
             </div>
             <div className="mt-1.5 font-display text-2xl font-bold tracking-tight tabular-nums text-teal-700 dark:text-teal-400">
               {formatCurrencyCompact(results.annualNetSavings)}
@@ -104,8 +110,14 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           </div>
 
           <div className="p-5">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              3-Yr Savings vs. {comp.shortLabel}
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span>3-Yr Savings vs. {comp.shortLabel}</span>
+              <InfoTooltip
+                label="3-Year Competitor TCO Advantage"
+                description={`Cumulative 36-month TCO advantage over ${comp.title} including upfront implementation (${comp.setupRangeLabel}), latency containment gap, metered surge exposure, and Yr2–Yr3 Offline Self-Learning compression.`}
+                tcoImpact="Quantifies total multi-year budget saved vs. buying an orchestrator-only or DIY hyperscaler stack."
+                placement="bottom"
+              />
             </div>
             <div className="mt-1.5 font-display text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-slate-50">
               {formatCurrencyCompact(payback.threeYearCompetitorSavings)}
@@ -116,8 +128,15 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           </div>
 
           <div className="p-5">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              Containment Lift
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span>Containment Lift</span>
+              <InfoTooltip
+                label="Incremental Containment Lift"
+                description="Percentage-point jump from your Legacy IVR Baseline to Omilia's blended deterministic + agentic containment rate."
+                tcoImpact="Every incremental call contained avoids loaded human labor and pays the flat Omilia outcome rate instead."
+                placement="bottom"
+                align="center"
+              />
             </div>
             <div className="mt-1.5 font-display text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-slate-50">
               +{results.containmentLiftPct}%
@@ -128,8 +147,15 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           </div>
 
           <div className="p-5">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              Days / Mo per Agent Saved
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span>Days / Mo per Agent Saved</span>
+              <InfoTooltip
+                label="Days/Mo per Agent Saved"
+                description="Average productive workdays freed per active agent each month from incremental deflection plus TalkGuard KBA and CoPilot ACW savings."
+                tcoImpact="Shows frontline operational relief in tangible queue hours without requiring immediate headcount cuts."
+                placement="bottom"
+                align="right"
+              />
             </div>
             <div className="mt-1.5 font-display text-2xl font-bold tracking-tight tabular-nums text-teal-700 dark:text-teal-400">
               {results.daysSavedPerAgentMo.toFixed(1)} days
@@ -140,8 +166,15 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           </div>
 
           <div className="p-5">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              Equivalent FTEs Freed
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span>Equivalent FTEs Freed</span>
+              <InfoTooltip
+                label="Equivalent FTEs Freed"
+                description="Total monthly agent hours reclaimed divided by Shift Hrs/Day × Work Days/Mo."
+                tcoImpact="Demonstrates hiring avoidance during seasonal peaks or capacity reallocation to higher-value retention queues."
+                placement="bottom"
+                align="right"
+              />
             </div>
             <div className="mt-1.5 font-display text-2xl font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400">
               {Math.round(results.ftesFreed).toLocaleString()} FTEs
@@ -724,11 +757,18 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             {/* TCO Comparison Header + Chart Mode Switcher */}
             <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  {chartView === 'bars'
-                    ? `Annualized Yr-1 TCO: Legacy vs. ${comp.shortLabel} vs. Omilia Sovereign Stack`
-                    : `36-Month Cumulative Cash Flow & Self-Learning Compression (${comp.shortLabel})`}
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                    {chartView === 'bars'
+                      ? `Annualized Yr-1 TCO: Legacy vs. ${comp.shortLabel} vs. Omilia Sovereign Stack`
+                      : `36-Month Cumulative Cash Flow & Self-Learning Compression (${comp.shortLabel})`}
+                  </h2>
+                  <InfoTooltip
+                    label="Annual TCO vs. 36-Month Cash Flow"
+                    description="Switch between Year-1 annualized run-rate bars and the 36-month cumulative curve showing upfront PS break-even and Offline Self-Learning compression (-10% Yr2, -18% Yr3)."
+                    tcoImpact="Proves both Day-1 annual savings and how long it takes cumulative cash savings to recover upfront Phase 1 PS."
+                  />
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {chartView === 'bars'
                     ? `Omilia flat $${inputs.omiliaOutcomeRate.toFixed(2)}/res vs. metered pass-through token/ASR/TTS & escalation labor`
@@ -993,9 +1033,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             className="rounded-xl border border-teal-200 bg-teal-50/40 p-5 dark:border-teal-900/60 dark:bg-teal-950/25"
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-display text-xs font-bold text-slate-900 dark:text-slate-50">
-                Executive CFO &amp; Partner Summary — {preset.shortName} vs. {comp.title}
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-display text-xs font-bold text-slate-900 dark:text-slate-50">
+                  Executive CFO &amp; Partner Summary — {preset.shortName} vs. {comp.title}
+                </h3>
+                <InfoTooltip
+                  label="Executive CFO Summary"
+                  description="Dynamically recalculates a board-ready executive takeaway whenever you change vertical presets, competitor baselines, or sliders."
+                  tcoImpact="Translates technical latency, egress, and Self-Learning curves into CFO language ready for copy-paste or slide export."
+                />
+              </div>
               <span className="font-mono text-[11px] font-semibold tabular-nums text-teal-700 dark:text-teal-400">
                 {formatCurrencyCompact(payback.threeYearCompetitorSavings)} 3-Yr TCO Advantage
               </span>
@@ -1031,11 +1078,18 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           <section className="rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
               <div>
-                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  {tableView === 'cfo'
-                    ? 'CFO Financial & Architectural Impact Breakdown'
-                    : 'Containment Sensitivity Matrix (±10% Execution Bands)'}
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                    {tableView === 'cfo'
+                      ? 'CFO Financial & Architectural Impact Breakdown'
+                      : 'Containment Sensitivity Matrix (±10% Execution Bands)'}
+                  </h2>
+                  <InfoTooltip
+                    label="CFO Breakdown vs. Sensitivity Matrix"
+                    description="Toggle between the line-by-line Legacy vs. Competitor vs. Omilia TCO audit table and the ±10% Containment Sensitivity stress test."
+                    tcoImpact="Shows procurement teams that even in a -10% Conservative scenario, Omilia remains strongly ROI-positive."
+                  />
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {tableView === 'cfo'
                     ? `Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`

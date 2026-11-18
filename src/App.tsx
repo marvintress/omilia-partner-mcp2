@@ -8,6 +8,7 @@ import { AiRadarTab } from './components/AiRadarTab';
 import { DealBriefModal } from './components/DealBriefModal';
 import { DealScopingTab } from './components/DealScopingTab';
 import { McpInspectorTab } from './components/McpInspectorTab';
+import { PovBlueprintTab } from './components/PovBlueprintTab';
 import { ScenariosModal } from './components/ScenariosModal';
 import { TabKey, TopBar } from './components/TopBar';
 import { TsServerModal } from './components/TsServerModal';
@@ -19,7 +20,9 @@ import {
   COMPETITOR_PROFILES,
   CompetitorArchetype,
   DealMetadata,
+  DEFAULT_POV_CONFIG,
   PartnerMotion,
+  PovConfig,
   SovereigntyTier,
   UseCase,
   VERTICAL_PRESETS,
@@ -30,12 +33,13 @@ import {
   buildDealCsv,
   buildExecutiveDealBrief,
   calculateHlee,
+  calculatePovPlan,
   calculateUnitEconomics,
   computeFittedAgents,
   computePaybackAndCashFlow,
   computeSensitivityScenarios,
   formatCurrencyCompact,
-  isTopRightQuadrant,
+  isHighFeasibilityQuadrant,
   RoiInputs,
 } from './utils/calculations';
 import {
@@ -48,12 +52,13 @@ import {
   saveDealProfile,
   ScenarioPayload,
 } from './utils/scenarioStorage';
+import { downloadValuePropDeck } from './utils/exportDeck';
 
 function buildDefaultUseCases(preset: VerticalPreset): UseCase[] {
   return preset.useCases.map((u, idx) => ({
     ...u,
     id: `${preset.key}-uc-${idx}`,
-    included: u.feas >= 50 && u.imp >= 50,
+    included: u.feas >= 50,
   }));
 }
 
@@ -167,6 +172,10 @@ export default function App() {
   const [competitorArchetype, setCompetitorArchetype] = useState<CompetitorArchetype>(
     () => urlSeed?.competitorArchetype ?? 'byollm'
   );
+  const [povConfig, setPovConfig] = useState<PovConfig>(() => ({
+    ...DEFAULT_POV_CONFIG,
+    ...(urlSeed?.povConfig ?? {}),
+  }));
   const [psDayRate, setPsDayRate] = useState<number>(() => urlSeed?.psDayRate ?? 1800);
   const [dealMeta, setDealMeta] = useState<DealMetadata>(() => urlSeed?.dealMeta ?? DEFAULT_DEAL_META);
   const [savedDeals, setSavedDeals] = useState<SavedDealProfile[]>(() => loadSavedDeals());
@@ -175,6 +184,7 @@ export default function App() {
   const [briefCopied, setBriefCopied] = useState(false);
   const [tsModalOpen, setTsModalOpen] = useState(false);
   const [scenariosModalOpen, setScenariosModalOpen] = useState(false);
+  const [isExportingDeck, setIsExportingDeck] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(() =>
     urlSeed ? `Loaded shared ${VERTICAL_PRESETS[urlSeed.vertical].shortName} scenario from URL` : null
   );
@@ -204,7 +214,7 @@ export default function App() {
   );
 
   const includedUseCases = useMemo(
-    () => useCases.filter((uc) => isTopRightQuadrant(uc) && uc.included !== false),
+    () => useCases.filter((uc) => isHighFeasibilityQuadrant(uc) && uc.included !== false),
     [useCases]
   );
 
@@ -216,6 +226,18 @@ export default function App() {
   const payback = useMemo(
     () => computePaybackAndCashFlow(roiResults, hlee.psDays, psDayRate, inputs.omiliaOutcomeRate),
     [roiResults, hlee.psDays, psDayRate, inputs.omiliaOutcomeRate]
+  );
+
+  const povPlan = useMemo(
+    () =>
+      calculatePovPlan(
+        preset,
+        includedUseCases,
+        povConfig,
+        competitorArchetype,
+        payback.implementationCost
+      ),
+    [preset, includedUseCases, povConfig, competitorArchetype, payback.implementationCost]
   );
 
   const sensitivity = useMemo(
@@ -236,8 +258,21 @@ export default function App() {
         psDayRate,
         payback,
         dealMeta,
+        povPlan,
       }),
-    [preset, inputs, roiResults, includedUseCases, partnerMotion, sovereignty, hlee, psDayRate, payback, dealMeta]
+    [
+      preset,
+      inputs,
+      roiResults,
+      includedUseCases,
+      partnerMotion,
+      sovereignty,
+      hlee,
+      psDayRate,
+      payback,
+      dealMeta,
+      povPlan,
+    ]
   );
 
   const buildCurrentPayload = (): ScenarioPayload => ({
@@ -249,6 +284,7 @@ export default function App() {
     sovereignty,
     apiReadiness,
     competitorArchetype,
+    povConfig,
     psDayRate,
     dealMeta,
   });
@@ -278,6 +314,18 @@ export default function App() {
       ...prev,
       [key]: val,
     }));
+  };
+
+  const handleUpdatePov = <K extends keyof PovConfig>(key: K, val: PovConfig[K]) => {
+    setPovConfig((prev) => ({
+      ...prev,
+      [key]: val,
+    }));
+  };
+
+  const handleResetPov = () => {
+    setPovConfig(DEFAULT_POV_CONFIG);
+    notify('Reset POV / POC Blueprint to recommended defaults');
   };
 
   const handleApplyLaborPreset = (wage: number, burden: number) => {
@@ -312,9 +360,9 @@ export default function App() {
     setUseCasesByVertical((prev) => ({
       ...prev,
       [vertical]: prev[vertical].map((uc) => {
-        if (uc.id !== id || !isTopRightQuadrant(uc)) return uc;
+        if (uc.id !== id || !isHighFeasibilityQuadrant(uc)) return uc;
         const nextIncluded = uc.included === false;
-        notify(nextIncluded ? `Included "${uc.name}" in Phase 1 SOW` : `Excluded "${uc.name}" from Phase 1 SOW`);
+        notify(nextIncluded ? `Included "${uc.name}" in Phase 1 / Hybrid Scope` : `Excluded "${uc.name}" from Phase 1 / Hybrid Scope`);
         return { ...uc, included: nextIncluded };
       }),
     }));
@@ -325,12 +373,12 @@ export default function App() {
       ...prev,
       [vertical]: prev[vertical].map((uc) => {
         if (uc.id !== id) return uc;
-        const wasTopRight = isTopRightQuadrant(uc);
-        const isNowTopRight = feas >= 50 && imp >= 50;
+        const wasHighFeas = isHighFeasibilityQuadrant(uc);
+        const isNowHighFeas = feas >= 50;
         let nextIncluded = uc.included;
-        if (isNowTopRight && !wasTopRight) {
+        if (isNowHighFeas && !wasHighFeas) {
           nextIncluded = true;
-        } else if (!isNowTopRight) {
+        } else if (!isNowHighFeas) {
           nextIncluded = false;
         }
         return {
@@ -363,19 +411,21 @@ export default function App() {
 
   const handleAddCustomUseCase = (name: string, feas: number, imp: number) => {
     const isHighFeas = feas >= 50;
-    const inTopRight = feas >= 50 && imp >= 50;
+    const isTopRight = feas >= 50 && imp >= 50;
     const newUc: UseCase = {
       id: `${vertical}-custom-${Date.now()}`,
       name,
       feas,
       imp,
-      included: inTopRight,
+      included: isHighFeas,
       desc: `Custom prospect call driver scoped live during ${preset.name} discovery.`,
-      runtime: isHighFeas
+      runtime: isTopRight
         ? 'Deterministic miniApps® + AI Bootstrapping'
+        : isHighFeas
+        ? 'OCP Knowledge Engine (Voice-Safe RAG Quick Win)'
         : 'Autonomous Task Agent + Human-in-the-Loop Gate',
       rollout: isHighFeas
-        ? 'Phase 1 (Weeks 1–3): Ingest historical call transcripts & OpenAPI schema for 95%+ Day-1 accuracy.'
+        ? 'Phase 1 (Weeks 1–3): Ingest historical call transcripts & OpenAPI/knowledge sources for 95%+ Day-1 accuracy.'
         : "Phase 2 ('Training Wheels'): Expose backend API via MCP facade first, then graduate from supervised assist to autonomous execution.",
       gov: 'Glass Box decision logging + zero frontier model egress.',
     };
@@ -388,8 +438,8 @@ export default function App() {
       [vertical]: newUc.id,
     }));
     notify(
-      inTopRight
-        ? `Plotted "${name}" in Top-Right Quadrant & added to Phase 1 Scope`
+      isHighFeas
+        ? `Plotted "${name}" in ${isTopRight ? 'Top-Right' : 'Bottom-Right'} & added to Phase 1 / Hybrid Scope`
         : `Plotted "${name}" on AI Radar 2.0 (Phase 2/3)`
     );
   };
@@ -420,13 +470,13 @@ export default function App() {
   };
 
   const handleSetIntentCount = (targetCount: number) => {
-    let seenTopRight = 0;
+    let seenHighFeas = 0;
     setUseCasesByVertical((prev) => ({
       ...prev,
       [vertical]: prev[vertical].map((uc) => {
-        if (!isTopRightQuadrant(uc)) return uc;
-        const included = seenTopRight < targetCount;
-        seenTopRight += 1;
+        if (!isHighFeasibilityQuadrant(uc)) return uc;
+        const included = seenHighFeas < targetCount;
+        seenHighFeas += 1;
         return { ...uc, included };
       }),
     }));
@@ -471,6 +521,7 @@ export default function App() {
     setSovereignty(p.sovereignty);
     setApiReadiness(p.apiReadiness);
     setCompetitorArchetype(p.competitorArchetype ?? 'byollm');
+    setPovConfig({ ...DEFAULT_POV_CONFIG, ...(p.povConfig ?? {}) });
     setPsDayRate(p.psDayRate || 1800);
     setDealMeta(p.dealMeta ?? DEFAULT_DEAL_META);
     notify(`Loaded deal "${deal.name}"`);
@@ -493,6 +544,7 @@ export default function App() {
       payback,
       sensitivity,
       dealMeta,
+      povPlan,
     });
     const slug = (dealMeta.prospectName || preset.shortName)
       .toLowerCase()
@@ -508,6 +560,60 @@ export default function App() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     notify('Downloaded Excel-ready CSV deal model');
+  };
+
+  const handleDownloadDeck = async () => {
+    if (isExportingDeck) return;
+    setIsExportingDeck(true);
+    try {
+      const fileName = await downloadValuePropDeck({
+        preset,
+        inputs,
+        results: roiResults,
+        useCases,
+        partnerMotion,
+        sovereignty,
+        apiReadiness,
+        hlee,
+        psDayRate,
+        payback,
+        sensitivity,
+        dealMeta,
+        motionLabel: MOTION_LABELS[partnerMotion],
+        sovereigntyLabel: SOVEREIGNTY_LABELS[sovereignty],
+        povConfig,
+        povPlan,
+      });
+      notify(`Downloaded 10-slide presentation (${fileName})`);
+    } catch {
+      notify('PowerPoint export failed — please retry');
+    } finally {
+      setIsExportingDeck(false);
+    }
+  };
+
+  const handleCopyPovCharter = async () => {
+    const text = [
+      `OMILIA INITIAL POV / POC CHARTER — ${preset.name.toUpperCase()}`,
+      dealMeta.prospectName ? `Prospect: ${dealMeta.prospectName}` : null,
+      `Intent Strategy: ${povPlan.scopeStrategyLabel}`,
+      `Timeline: ${povPlan.povDurationLabel} (vs. ${povPlan.competitorPovDurationLabel} on ${roiResults.competitorProfile.shortLabel})`,
+      `Bounded Hero Intents (${povPlan.heroIntents.length}): ${
+        povPlan.heroIntents.map((u) => `${u.name} (${u.feas}F/${u.imp}I)`).join(', ') || 'None'
+      }`,
+      `Backend Isolation: ${povPlan.backendIsolationLabel}`,
+      `Commercial Posture: ${povPlan.commercialLabel}`,
+      `Exit Gates: ${povPlan.exitGates.map((g) => `${g.metric}: ${g.threshold}`).join(' | ')}`,
+      `Conversion Clause: ${povPlan.conversionClause}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      notify('Copied POV / POC Charter to clipboard');
+    } catch {
+      notify('Clipboard copy unavailable');
+    }
   };
 
   const handleCopyTcoSummary = async () => {
@@ -541,7 +647,7 @@ export default function App() {
             .map(
               (uc, i) =>
                 `  ${i + 1}. ${uc.name} [${uc.feas}F / ${uc.imp}I — ${
-                  isTopRightQuadrant(uc) && uc.included !== false ? 'Phase 1 SOW' : 'Phase 2/3'
+                  isHighFeasibilityQuadrant(uc) && uc.included !== false ? 'Phase 1 / Hybrid SOW' : 'Phase 2/3'
                 }]\n     Runtime: ${uc.runtime}`
             )
             .join('\n')
@@ -578,6 +684,8 @@ export default function App() {
         onToggleTheme={() => setIsDark((d) => !d)}
         onPrint={() => window.print()}
         onOpenScenarios={() => setScenariosModalOpen(true)}
+        onDownloadDeck={handleDownloadDeck}
+        isExportingDeck={isExportingDeck}
         savedCount={savedDeals.length}
       />
 
@@ -634,6 +742,22 @@ export default function App() {
             onClearAll={handleClearAllUseCases}
             onRestoreDefaults={handleRestoreDefaults}
             onCopyRadarSummary={handleCopyRadarSummary}
+          />
+        )}
+
+        {activeTab === 'pov' && (
+          <PovBlueprintTab
+            preset={preset}
+            competitorProfile={roiResults.competitorProfile}
+            povConfig={povConfig}
+            povPlan={povPlan}
+            hlee={hlee}
+            phase1ImplementationCost={payback.implementationCost}
+            onUpdatePov={handleUpdatePov}
+            onResetPov={handleResetPov}
+            onCopyCharter={handleCopyPovCharter}
+            onGoToRadar={() => setActiveTab('radar')}
+            onGoToScoping={() => setActiveTab('scoping')}
           />
         )}
 
@@ -715,11 +839,14 @@ export default function App() {
         hlee={hlee}
         psDayRate={psDayRate}
         payback={payback}
+        povPlan={povPlan}
         dealMeta={dealMeta}
         onUpdateDealMeta={handleUpdateDealMeta}
         briefText={briefText}
         onCopyBrief={handleCopyBrief}
         onDownloadCsv={handleDownloadCsv}
+        onDownloadDeck={handleDownloadDeck}
+        isExportingDeck={isExportingDeck}
         copied={briefCopied}
       />
 
@@ -751,6 +878,8 @@ export default function App() {
         sovereignty={sovereignty}
         apiReadiness={apiReadiness}
         competitorArchetype={competitorArchetype}
+        povConfig={povConfig}
+        povPlan={povPlan}
         psDayRate={psDayRate}
         payback={payback}
         hlee={hlee}
@@ -763,6 +892,7 @@ export default function App() {
         onOpenBrief={() => setBriefModalOpen(true)}
         onOpenScenarios={() => setScenariosModalOpen(true)}
         onDownloadCsv={handleDownloadCsv}
+        onDownloadDeck={handleDownloadDeck}
         onOpenTsModal={() => setTsModalOpen(true)}
       />
 

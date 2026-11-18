@@ -13,6 +13,7 @@ import {
   ApiReadiness,
   CompetitorArchetype,
   PartnerMotion,
+  PovConfig,
   SovereigntyTier,
   UseCase,
   VerticalKey,
@@ -20,9 +21,13 @@ import {
 } from '../data/verticalPresets';
 import {
   formatCurrencyCompact,
+  formatCurrencyFull,
   HleeResult,
+  isBottomRightQuadrant,
+  isHighFeasibilityQuadrant,
   isTopRightQuadrant,
   PaybackAnalysis,
+  PovPlanResult,
   RoiInputs,
   RoiResults,
 } from '../utils/calculations';
@@ -64,6 +69,8 @@ interface WorkbenchGuideWidgetProps {
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
   competitorArchetype: CompetitorArchetype;
+  povConfig: PovConfig;
+  povPlan: PovPlanResult;
   psDayRate: number;
   payback: PaybackAnalysis;
   hlee: HleeResult;
@@ -76,6 +83,7 @@ interface WorkbenchGuideWidgetProps {
   onOpenBrief: () => void;
   onOpenScenarios: () => void;
   onDownloadCsv: () => void;
+  onDownloadDeck: () => void;
   onOpenTsModal: () => void;
 }
 
@@ -83,45 +91,56 @@ const TOUR_STEPS: {
   step: number;
   tab: TabKey;
   title: string;
-  summary: (ctx: {
+    summary: (ctx: {
     preset: VerticalPreset;
     inputs: RoiInputs;
     results: RoiResults;
     useCases: UseCase[];
     hlee: HleeResult;
+    povConfig: PovConfig;
+    povPlan: PovPlanResult;
   }) => string;
 }[] = [
   {
     step: 1,
     tab: 'economics',
-    title: 'Step 1 of 4 · Unit Economics & TCO Simulator',
+    title: 'Step 1 of 5 · Unit Economics & TCO Simulator',
     summary: ({ preset, inputs, results }) =>
       `Viewing ${preset.name} vs. ${results.competitorProfile.title} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Architecture Baseline: toggle Packaged BYOLLM (Cognigy/Kore/Parloa) vs. DIY Hyperscaler (Azure OpenAI/Bedrock).\n• Volume, Baseline vs. Target Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), and Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/resolved).\n• Toggle Annual TCO Bars vs. 36-Month Cash Flow (showing Offline Self-Learning compression from Yr1 to Yr3) + Sensitivity stress testing.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr net savings and ${formatCurrencyCompact(results.threeYearDiySavings)} 3-year edge vs. ${results.competitorProfile.shortLabel}.`,
   },
   {
     step: 2,
     tab: 'radar',
-    title: 'Step 2 of 4 · AI Radar 2.0 Prioritizer',
+    title: 'Step 2 of 5 · AI Radar 2.0 Prioritizer (Top-Right + Bottom-Right Hybrid)',
     summary: ({ useCases }) => {
       const topRight = useCases.filter(isTopRightQuadrant);
-      const included = topRight.filter((u) => u.included !== false);
-      return `Plots Feasibility & Data Maturity (X) against Financial & CX Impact (Y).\n\nWhat you can tweak here:\n• Drag any pin directly on the 2×2 matrix—or adjust the Feasibility & Impact sliders in the Inspector—to re-score workflows live.\n• Toggle Phase 1 SOW checkboxes on Top-Right items (≥50F & ≥50I)—currently ${included.length} of ${topRight.length} active.\n• Plot custom prospect call drivers live or clear the canvas for a clean discovery workshop.`;
+      const bottomRight = useCases.filter(isBottomRightQuadrant);
+      const highFeas = useCases.filter(isHighFeasibilityQuadrant);
+      const included = highFeas.filter((u) => u.included !== false);
+      return `Plots Feasibility & Data Maturity (X) against Financial & CX Impact (Y) across 4 quadrants.\n\nWhat you can tweak here:\n• Drag any pin directly on the 2×2 matrix—or adjust Feasibility & Impact sliders in the Inspector—to re-score workflows live.\n• Toggle Phase 1 / Hybrid SOW checkboxes on any High-Feasibility (≥50F) item: Top-Right Immediate Funding (${topRight.length}) + Bottom-Right Quick Wins / Voice-Safe RAG (${bottomRight.length}) — currently ${included.length} of ${highFeas.length} active.\n• Plot custom prospect call drivers, clear/reload defaults, or Print / Export PDF.`;
     },
   },
   {
     step: 3,
-    tab: 'scoping',
-    title: 'Step 3 of 4 · Partner Deal-Scoping & SOW Guardrails',
-    summary: ({ hlee, preset }) =>
-      `Converts Radar scope and architecture complexity into a fixed-scope SOW estimate.\n\nWhat you can tweak here:\n• Partner GTM Motion (CCaaS Co-Sell, GSI, or BPO) to tailor the co-sell hook & RACI split.\n• Deployment Sovereignty (OCP SaaS vs. Bare Metal +3 wks/+12 PS days) and Backend API Readiness.\n• PS Blended Day Rate ($/Day) to feed true implementation cost & break-even payback back into Unit Economics.\n\nLive estimate: ${hlee.timelineLabel} (${hlee.psEffortLabel}) under ${preset.compliance.slice(0, 3).join(', ')}.`,
+    tab: 'pov',
+    title: 'Step 3 of 5 · Initial POV / POC Blueprint',
+    summary: ({ povPlan, povConfig, results }) =>
+      `Locks a bounded ${povPlan.povDurationLabel} AI-Bootstrapped POV (vs. ${povPlan.competitorPovDurationLabel} on ${results.competitorProfile.shortLabel}) before Phase 1 SOW commitment.\n\nWhat you can tweak here:\n• POV Intent Strategy (${povPlan.scopeStrategyLabel}) + 1–3 Hero Intent Cap — Hybrid pairs top-feasibility Top-Right (API/transactional) + Bottom-Right (RAG Quick Win).\n• Backend Isolation (OpenAPI Sandbox Stubs for zero InfoSec wait, Non-Prod Test API, or Live SIP + TalkGuard).\n• Commercial Structure (Funded-Credited, $0 Co-Sell, Paid Pilot), Fixed Fee (${formatCurrencyFull(povConfig.povFeeUsd)}), Exit Criteria (${povConfig.nluTargetPct}% NLU / ${povConfig.taskTargetPct}% Task / <${povConfig.latencyTargetMs}ms), plus Print / Export PDF & Copy Charter.`,
   },
   {
     step: 4,
+    tab: 'scoping',
+    title: 'Step 4 of 5 · Partner Deal-Scoping & SOW Guardrails',
+    summary: ({ hlee, preset }) =>
+      `Converts Radar scope and architecture complexity into a fixed-scope Phase 1 SOW estimate.\n\nWhat you can tweak here:\n• Partner GTM Motion (CCaaS Co-Sell, GSI, or BPO) to tailor the co-sell hook & RACI split.\n• Phase 1 / Hybrid Bounded Intents synced from High-Feasibility (Top-Right + Bottom-Right) Radar items.\n• Deployment Sovereignty (OCP SaaS vs. Bare Metal +3 wks/+12 PS days), Backend API Readiness, and PS Blended Day Rate ($/Day) feeding Unit Economics break-even.\n\nLive estimate: ${hlee.timelineLabel} (${hlee.psEffortLabel}) under ${preset.compliance.slice(0, 3).join(', ')}.`,
+  },
+  {
+    step: 5,
     tab: 'mcp',
-    title: 'Step 4 of 4 · Live MCP Protocol & Call Turn Replay',
+    title: 'Step 5 of 5 · Live MCP Protocol, Latency Waterfall & Call Turn Replay',
     summary: ({ preset }) => {
       const maxMs = Math.max(...preset.mcpSystems.map((s) => s.ms));
-      return `Demonstrates OCP as MCP Client calling customer-hosted MCP servers with Zero Frontier Egress.\n\nWhat you can tweak here:\n• Click "Simulate Call Turn" to replay an end-to-end vertical turn (8kHz ASR → Parallel MCP → Lexis <45ms TTS → UUI Handoff).\n• Toggle Localhost HTTP Bridge (:3333/mcp) vs. Embedded JSON-RPC 2.0 runtime and trigger all 5 JSON-RPC actions.\n• Compare the ${maxMs + 42}ms Omilia path against the 1,200ms hang-up line, or download the TypeScript MCP server.`;
+      return `Demonstrates OCP as MCP Client calling customer-hosted MCP servers with Zero Frontier Egress.\n\nWhat you can tweak here:\n• Click "Simulate Call Turn" to replay an end-to-end vertical turn (8kHz ASR → Parallel MCP → Lexis <45ms TTS → UUI Handoff).\n• Inspect the Voice Latency Budget Waterfall (${maxMs + 42}ms Omilia vs. 1,200ms caller hang-up threshold) & Glass Box JSON-RPC 2.0 Audit Trace.\n• Toggle Localhost HTTP Bridge (:3333/mcp) vs. Embedded JSON-RPC 2.0 runtime, trigger all 5 RPC actions, or download the TypeScript MCP server.`;
     },
   },
 ];
@@ -136,6 +155,8 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   sovereignty,
   apiReadiness,
   competitorArchetype,
+  povConfig,
+  povPlan,
   psDayRate,
   payback,
   hlee,
@@ -148,6 +169,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   onOpenBrief,
   onOpenScenarios,
   onDownloadCsv,
+  onDownloadDeck,
   onOpenTsModal,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -159,7 +181,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     {
       id: 'welcome',
       role: 'assistant',
-      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 4 tabs, explain what every slider, toggle, and selector tweaks (and why), or run live scenarios for ${preset.shortName}.\n\nAsk about any specific control—like "Why tweak surge?" or "Explain every control on this tab"—or switch to "Controls & Why" above to browse all settings.`,
+      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 5 tabs (Unit Economics, AI Radar, POV / POC, Deal Scoping, MCP Inspector), explain what every slider, toggle, and selector tweaks (and why), or generate your Value Prop Deck (.pptx) for ${preset.shortName}.\n\nAsk about any specific control—like "How do we scope a 2-week POV?" or "Explain every control on this tab"—or switch to "Controls & Why" above to browse all settings.`,
     },
   ]);
 
@@ -171,8 +193,8 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     }
   }, [messages, isOpen, widgetMode]);
 
-  const topRightCount = useCases.filter(isTopRightQuadrant).length;
-  const includedCount = useCases.filter((u) => isTopRightQuadrant(u) && u.included !== false).length;
+  const highFeasCount = useCases.filter(isHighFeasibilityQuadrant).length;
+  const includedCount = useCases.filter((u) => isHighFeasibilityQuadrant(u) && u.included !== false).length;
   const maxParallelMs = Math.max(...preset.mcpSystems.map((s) => s.ms));
 
   // Complete, live-synced catalog of every tweakable control in the workbench
@@ -392,13 +414,28 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       id: 'radarPins',
       tab: 'radar',
       tabLabel: 'AI Radar',
-      name: 'Draggable Radar Pins, Score Sliders & SOW Checkboxes',
-      currentValue: `${includedCount}/${topRightCount} Top-Right included`,
+      name: 'Draggable Radar Pins, Score Sliders & Hybrid SOW Checkboxes',
+      currentValue: `${includedCount}/${highFeasCount} High-Feas (≥50F)`,
       whatItDoes:
-        'Drag any pin on the 2×2 matrix—or tweak Feasibility & Impact sliders inside the Inspector—to move workflows between Phase 1 and Phase 2 and recompute HLEE PS Days.',
+        'Drag any pin on the 2×2 matrix—or tweak Feasibility & Impact sliders inside the Inspector—to re-score workflows live. Any High-Feasibility (≥50F) Top-Right or Bottom-Right intent can be toggled into Phase 1 / Hybrid SOW.',
       whyItMatters:
-        'Enforces strict 80/20 discipline live with stakeholders: if a prospect reveals a legacy dependency mid-meeting, dragging Feasibility below 50 defers it out of Phase 1 SOW automatically.',
-      keywords: ['radar', 'pin', 'drag', 'quadrant', 'checkbox', 'phase 1', 'training wheels', 'runtime', 'rescore'],
+        'Combines high-impact core API containment (Top-Right) with fast-win RAG/FAQ deflection (Bottom-Right), while automatically deferring <50F legacy dependencies out of Phase 1 SOW.',
+      keywords: [
+        'radar',
+        'pin',
+        'drag',
+        'quadrant',
+        'checkbox',
+        'phase 1',
+        'training wheels',
+        'runtime',
+        'rescore',
+        'hybrid',
+        'top right',
+        'bottom right',
+        'quick win',
+        'rag',
+      ],
       actionLabel: 'Open AI Radar',
       onAction: () => onSelectTab('radar'),
     },
@@ -406,13 +443,13 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       id: 'customUc',
       tab: 'radar',
       tabLabel: 'AI Radar',
-      name: 'Plot Custom Prospect Use Case Live',
+      name: 'Plot Custom Prospect Use Case Live & Radar Print/PDF',
       currentValue: `${useCases.length} intents plotted`,
       whatItDoes:
-        'Adds a client-specific call driver with Feasibility (5–99) and Impact (5–99) scores. Scores ≥75F add +2 PS days; 50–74F add +3 PS days.',
+        'Adds a client-specific call driver with Feasibility (5–99) and Impact (5–99) scores. Scores ≥75F add +2 PS days; 50–74F add +3 PS days. Print / Export PDF outputs the full matrix and specification table.',
       whyItMatters:
-        'Turns live discovery calls into an interactive workshop where prospects see immediately whether a workflow belongs in Phase 1 or Phase 2.',
-      keywords: ['custom', 'plot', 'add use case', 'feasibility', 'impact', 'discovery'],
+        'Turns live discovery calls into an interactive workshop where prospects see immediately whether a workflow belongs in Hybrid Phase 1 or Phase 2+.',
+      keywords: ['custom', 'plot', 'add use case', 'feasibility', 'impact', 'discovery', 'filter'],
       actionLabel: 'Plot Sample Use Case',
       onAction: () => {
         onSelectTab('radar');
@@ -420,13 +457,84 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       },
     },
     {
+      id: 'povStrategyScope',
+      tab: 'pov',
+      tabLabel: 'POV / POC',
+      name: 'POV Intent Strategy (Hybrid TR + BR) & Bounded Hero Cap',
+      currentValue: `${povPlan.scopeStrategyLabel} · ${povPlan.heroIntents.length} Intents`,
+      whatItDoes:
+        'Selects Hybrid (top-feasibility Top-Right API workflow + top-feasibility Bottom-Right RAG Quick Win, default), Top-Right Only, or Bottom-Right Only, bounded to 1–3 Hero Intents.',
+      whyItMatters:
+        'Proves both complex deterministic transactions and zero-friction Week-1 RAG FAQ containment in one bounded 2–3 week validation instead of open-ended POCs.',
+      keywords: [
+        'pov',
+        'poc',
+        'hybrid',
+        'strategy',
+        'top right',
+        'top-right',
+        'bottom right',
+        'bottom-right',
+        'quick win',
+        'hero',
+        'intent',
+        'cap',
+      ],
+      actionLabel: 'Open POV / POC Tab',
+      onAction: () => onSelectTab('pov'),
+    },
+    {
+      id: 'povBackend',
+      tab: 'pov',
+      tabLabel: 'POV / POC',
+      name: 'Backend Integration & InfoSec Isolation Mode',
+      currentValue:
+        povConfig.backendMode === 'sandbox_mock'
+          ? 'OpenAPI Sandbox Stub'
+          : povConfig.backendMode === 'nonprod_api'
+          ? 'Non-Prod Test API'
+          : 'Live SIP + TalkGuard',
+      whatItDoes:
+        'Switches POV integration between Synthetic OpenAPI/JSON Sandbox Stubs (zero firewall/InfoSec delay, 2–3 wks), Non-Prod Test API/MCP Bridge (3 wks), or Live SIP Trunk + TalkGuard (3–4 wks).',
+      whyItMatters:
+        'Keeps POV kickoff under 5 business days by isolating long InfoSec security review queues until after Buyer Value is proven.',
+      keywords: ['sandbox', 'stub', 'infosec', 'non-prod', 'nonprod', 'sip', 'backend', 'isolation', 'prerequisites'],
+    },
+    {
+      id: 'povCommercial',
+      tab: 'pov',
+      tabLabel: 'POV / POC',
+      name: 'POV Commercial Structure & Phase 1 Credit Fee',
+      currentValue:
+        povPlan.effectiveFeeUsd === 0
+          ? '$0 Co-Sell'
+          : `${formatCurrencyFull(povPlan.effectiveFeeUsd)} (${povPlan.phase1CreditUsd > 0 ? '100% Credited' : 'Pilot'})`,
+      whatItDoes:
+        'Configures Funded Fixed-Fee (100% credited to Phase 1 PS), Partner Co-Sell ($0 client fee), or Production-Path Paid Pilot with adjustable fee ($10K–$50K).',
+      whyItMatters:
+        'Filters tire-kickers while keeping net 36-month TCO zero-incremental when the funded fee rolls 100% into the Phase 1 SOW.',
+      keywords: ['fee', 'credit', 'credited', 'funded', 'co-sell', 'pilot', 'commercial', 'conversion'],
+    },
+    {
+      id: 'povExitGates',
+      tab: 'pov',
+      tabLabel: 'POV / POC',
+      name: 'Exit Criteria Thresholds, TalkGuard Gate & POV Print/PDF',
+      currentValue: `≥${povConfig.nluTargetPct}% NLU · ≥${povConfig.taskTargetPct}% Task · <${povConfig.latencyTargetMs}ms`,
+      whatItDoes:
+        'Sets binary go/no-go pass gates (Day-1 NLU Target, Task Resolution Target, Voice Latency SLA, and optional TalkGuard Deepfake Gate) alongside 1-click Copy POV Charter and Print / Export PDF.',
+      whyItMatters:
+        'Replaces subjective pilot feedback with pre-signed conversion gates tied directly to the Unit Economics TCO model, plus a clean PDF charter leave-behind.',
+      keywords: ['exit', 'criteria', 'gate', 'scorecard', 'nlu', 'task', 'print', 'pdf', 'charter', 'sprint', 'week'],
+    },
+    {
       id: 'gtmMotion',
       tab: 'scoping',
       tabLabel: 'Deal Scoping',
-      name: 'Partner GTM Motion',
+      name: 'Partner GTM Motion & RACI Matrix',
       currentValue: partnerMotion.toUpperCase(),
       whatItDoes:
-        'Switches between CCaaS Co-Sell, Global Systems Integrator (GSI), and BPO Managed CX, updating the co-sell hook and RACI delivery ownership.',
+        'Switches between CCaaS Co-Sell, Global Systems Integrator (GSI), and BPO Managed CX, updating the co-sell positioning hook and RACI delivery ownership.',
       whyItMatters:
         'Aligns the pitch and SOW boundaries with partner incentives (unblocking CCaaS migrations, scaling GSI practices, or protecting BPO margins).',
       keywords: ['gtm', 'motion', 'ccaas', 'gsi', 'bpo', 'raci', 'co-sell'],
@@ -443,7 +551,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
         'Toggles Managed AWS Certified Walled Garden (SaaS) vs. On-Prem / Air-Gapped (Bare Metal, which adds +3 weeks & +12 PS days).',
       whyItMatters:
         'Quantifies the InfoSec and infrastructure effort for air-gapped deployments upfront so partners do not under-scope PS hours.',
-      keywords: ['sovereignty', 'saas', 'bare metal', 'baremetal', 'air-gapped', 'on-prem'],
+      keywords: ['sovereignty', 'saas', 'bare metal', 'baremetal', 'air-gapped', 'on-prem', 'walled garden'],
       actionLabel: sovereignty === 'saas' ? 'Test Bare Metal (+3 Wks)' : 'Switch to OCP SaaS',
       onAction: () => {
         onSelectTab('scoping');
@@ -454,10 +562,10 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       id: 'intentSlider',
       tab: 'scoping',
       tabLabel: 'Deal Scoping',
-      name: 'Phase 1 Bounded Intents & PS Blended Day Rate',
+      name: 'Phase 1 / Hybrid Bounded Intents & PS Blended Day Rate',
       currentValue: `${includedCount} Intents · $${psDayRate.toLocaleString()}/d`,
       whatItDoes:
-        'Adjusts active Top-Right Radar intents (8 base PS days + 2–3 PS days per intent) and prices PS Days using your Blended Day Rate.',
+        'Adjusts active High-Feasibility (Top-Right + Bottom-Right, ≥50F) Radar intents (8 base PS days + 2–3 PS days per intent) and prices PS Days using your Blended Day Rate.',
       whyItMatters:
         'Feeds total upfront implementation dollars back into Unit Economics so Break-Even Payback and 36-month cash flow reflect true partner services pricing.',
       keywords: ['bounded intents', 'intent count', 'hlee', 'ps days', 'ps rate', 'day rate', 'timeline', 'weeks', 'sow'],
@@ -475,16 +583,30 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       keywords: ['api readiness', 'middleware', 'soap', 'mainframe', 'rest', 'graphql', '3270'],
     },
     {
+      id: 'mcpWaterfallReplay',
+      tab: 'mcp',
+      tabLabel: 'MCP Inspector',
+      name: 'Voice Latency Waterfall, Live Call Turn Replay & Audit Wire Trace',
+      currentValue: `${maxParallelMs + 42}ms Omilia total`,
+      whatItDoes:
+        'Contrasts Omilia’s Parallel Async MCP + <45ms Lexis TTS against multi-hop sequential chains relative to the 1,200ms hang-up threshold, and replays a 4-stage live turn (ASR → Parallel MCP → Lexis → SIP/UUI Handoff) with Glass Box JSON-RPC traces.',
+      whyItMatters:
+        'Visually proves why sub-1s turn latency preserves containment and how UUI warm handoffs preserve full caller context for escalated CSR CoPilot calls.',
+      keywords: ['waterfall', 'latency', '1200', '300ms', 'lexis', 'replay', 'call turn', 'uui', 'audit', 'wire trace', 'glass box'],
+      actionLabel: 'Open MCP Inspector',
+      onAction: () => onSelectTab('mcp'),
+    },
+    {
       id: 'mcpBridge',
       tab: 'mcp',
       tabLabel: 'MCP Inspector',
-      name: 'Live Call Turn Replay, Localhost Bridge & RPC Actions',
-      currentValue: `${maxParallelMs + 42}ms Omilia total`,
+      name: 'Localhost HTTP Bridge, 5 JSON-RPC Actions & TypeScript Server',
+      currentValue: 'Embedded / :3333/mcp',
       whatItDoes:
-        'Simulates an end-to-end voice turn (ASR → Parallel MCP → Lexis TTS → UUI Handoff) alongside Embedded JSON-RPC 2.0 or http://localhost:3333/mcp tool calls.',
+        'Toggles between Embedded offline JSON-RPC 2.0 runtime and http://localhost:3333/mcp, executes all 5 MCP actions (including CFO TCO & Radar Report), and lets you view/download the TypeScript MCP server.',
       whyItMatters:
-        'Proves sub-300ms parallel MCP fan-out + Lexis TTS (<45ms) well under the 1,200ms caller hang-up threshold—with Zero Frontier Egress.',
-      keywords: ['mcp', 'localhost', 'bridge', '3333', 'waterfall', 'latency', '1200', '300ms', 'lexis', 'json-rpc', 'typescript', 'replay', 'call turn', 'uui'],
+        'Demonstrates OCP acting as MCP Client calling customer-hosted MCP tools with mTLS, OAuth 2.0, schema validation, and Zero Frontier Egress.',
+      keywords: ['mcp', 'localhost', 'bridge', '3333', 'json-rpc', 'typescript', 'server', 'tools/list'],
       actionLabel: 'Open MCP Inspector',
       onAction: () => onSelectTab('mcp'),
     },
@@ -492,15 +614,35 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       id: 'scenariosCsv',
       tab: 'economics',
       tabLabel: 'Global',
-      name: 'Shareable Scenario URLs, Saved Deals & CSV Export',
+      name: 'Value Prop Deck (.pptx), Scenario URLs, CSV & PDF Reports',
       currentValue: `${formatCurrencyCompact(payback.implementationCost)} PS · Ready`,
       whatItDoes:
-        'Encodes full workbench state into a shareable ?s= link, saves named deal profiles in localStorage, adds prospect/partner metadata in Deal Brief, and exports a full .csv workbook.',
+        'Exports a 10-slide editable PowerPoint presentation (.pptx) with speaker notes, charts, POV charter, and feature walkthrough; encodes shareable ?s= URLs; saves local snapshots; prints PDF reports; and exports Excel-ready .csv models.',
       whyItMatters:
-        'Enables champions, SEs, and CFO reviewers to reopen exact deal models, compare accounts, and audit all numbers inside Excel.',
-      keywords: ['share', 'url', 'link', 'save', 'profile', 'scenario', 'csv', 'metadata', 'prospect', 'export'],
-      actionLabel: 'Open Scenarios',
-      onAction: onOpenScenarios,
+        'Lets partners configure the workbench once and immediately walk out with an editable executive deck explaining every lever against the Omilia value proposition.',
+      keywords: [
+        'share',
+        'url',
+        'link',
+        'save',
+        'profile',
+        'scenario',
+        'csv',
+        'metadata',
+        'prospect',
+        'export',
+        'pptx',
+        'powerpoint',
+        'deck',
+        'slide',
+        'presentation',
+        'preso',
+        'pdf',
+        'print',
+        'tooltip',
+      ],
+      actionLabel: 'Download Deck (.pptx)',
+      onAction: onDownloadDeck,
     },
   ];
 
@@ -521,11 +663,11 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     setWidgetMode('chat');
     onSelectTab(def.tab);
 
-    const nextStep = stepNumber < 4 ? stepNumber + 1 : null;
+    const nextStep = stepNumber < 5 ? stepNumber + 1 : null;
     const actions: GuideAction[] = nextStep
       ? [
           {
-            label: `Next: Step ${nextStep} of 4`,
+            label: `Next: Step ${nextStep} of 5`,
             onClick: () => runTourStep(nextStep),
           },
           {
@@ -534,8 +676,8 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
           },
         ]
       : [
+          { label: 'Download Value Prop Deck (.pptx)', onClick: onDownloadDeck },
           { label: 'Open Executive Deal Brief', onClick: onOpenBrief },
-          { label: 'Browse All Controls', onClick: () => setWidgetMode('controls') },
         ];
 
     setMessages((prev) => [
@@ -543,7 +685,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       {
         id: `tour-${stepNumber}-${Date.now()}`,
         role: 'assistant',
-        text: `${def.title}\n\n${def.summary({ preset, inputs, results, useCases, hlee })}`,
+        text: `${def.title}\n\n${def.summary({ preset, inputs, results, useCases, hlee, povConfig, povPlan })}`,
         actions,
       },
     ]);
@@ -554,6 +696,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     const tabNames: Record<TabKey, string> = {
       economics: 'Unit Economics & TCO Simulator',
       radar: 'AI Radar 2.0 Prioritizer',
+      pov: 'Initial POV / POC Blueprint',
       scoping: 'Partner Deal-Scoping & SOW Guardrails',
       mcp: 'Live MCP Protocol Inspector',
     };
@@ -594,6 +737,8 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     ) {
       const targetTab: TabKey = q.includes('radar')
         ? 'radar'
+        : q.includes('pov') || q.includes('poc') || q.includes('pilot')
+        ? 'pov'
         : q.includes('scop') || q.includes('sow') || q.includes('hlee')
         ? 'scoping'
         : q.includes('mcp') || q.includes('inspector')
@@ -609,7 +754,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       setTourStep(1);
       onSelectTab('economics');
       return {
-        text: `${TOUR_STEPS[0].title}\n\n${TOUR_STEPS[0].summary({ preset, inputs, results, useCases, hlee })}`,
+        text: `${TOUR_STEPS[0].title}\n\n${TOUR_STEPS[0].summary({ preset, inputs, results, useCases, hlee, povConfig, povPlan })}`,
         actions: [
           { label: 'Next: Step 2 (AI Radar)', onClick: () => runTourStep(2) },
           { label: 'Explain Every Unit Economics Control', onClick: () => handleQuickPrompt('Explain every control on economics') },
@@ -653,7 +798,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       return { text, actions };
     }
 
-    // D. Export / Brief / Print / Scenarios / CSV
+    // D. Export / Brief / Print / Scenarios / CSV / PowerPoint Deck
     if (
       q.includes('export') ||
       q.includes('brief') ||
@@ -661,11 +806,18 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       q.includes('print') ||
       q.includes('csv') ||
       q.includes('share') ||
-      q.includes('scenario')
+      q.includes('scenario') ||
+      q.includes('pptx') ||
+      q.includes('deck') ||
+      q.includes('powerpoint') ||
+      q.includes('slide') ||
+      q.includes('presentation') ||
+      q.includes('preso')
     ) {
       return {
-        text: `You can share scenarios via URL (?s=...), save named deal profiles locally in the Scenarios modal, add Prospect/Partner/CCaaS metadata inside Executive Deal Brief, and download a full .csv model for Excel or CFO review.`,
+        text: `Once configured, click "Download Deck (.pptx)" in the workspace bar or Executive Deal Brief to download an editable 10-slide PowerPoint presentation (with charts, speaker notes, competitive baseline, POV charter, and feature-by-feature walkthrough). You can also share ?s= URLs, save deal profiles, or export Excel-ready .csv models.`,
         actions: [
+          { label: 'Download Deck (.pptx)', onClick: onDownloadDeck },
           { label: 'Open Executive Deal Brief', onClick: onOpenBrief },
           { label: 'Save / Share Scenarios', onClick: onOpenScenarios },
           { label: 'Download CSV Model', onClick: onDownloadCsv },
@@ -675,9 +827,9 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
 
     // E. Fallback: Helpful guide + quick path to Controls & Why
     return {
-      text: `I can walk you through the 4 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "Why tweak surge?", "How is payback calculated?", "Can I drag Radar pins?", or "How do Scenarios & CSV work?") or open the Controls & Why reference tab above.`,
+      text: `I can walk you through the 5 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "Why tweak surge?", "How is payback calculated?", "How does POV / POC work?", or "How do Scenarios & CSV work?") or open the Controls & Why reference tab above.`,
       actions: [
-        { label: 'Start 4-Step Tour', onClick: () => runTourStep(1) },
+        { label: 'Start 5-Step Tour', onClick: () => runTourStep(1) },
         {
           label: 'Explain Every Control on Current Tab',
           onClick: () => handleQuickPrompt(`Explain every control on ${activeTab}`),
@@ -707,9 +859,14 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       'Explain every control on economics',
     ],
     radar: [
-      'Explain every control on radar',
+      'How does Hybrid (Top-Right + Bottom-Right) work?',
       'How does pin dragging affect SOW?',
-      'Plot a custom prospect driver',
+      'Explain every control on radar',
+    ],
+    pov: [
+      'Explain every control on pov',
+      'How does Hybrid select hero workflows?',
+      'Download Value Prop Deck (.pptx)',
     ],
     scoping: [
       'Explain every control on scoping',
@@ -730,7 +887,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       {
         id: `reset-${Date.now()}`,
         role: 'assistant',
-        text: `Guide reset for ${preset.name}. Ask what any control tweaks (and why), start the 4-step tour, or switch to "Controls & Why" to browse every setting.`,
+        text: `Guide reset for ${preset.name}. Ask what any control tweaks (and why), start the 5-step tour, or switch to "Controls & Why" to browse every setting across all 5 tabs.`,
       },
     ]);
   };
@@ -757,7 +914,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
                     Workbench Guide
                   </h2>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                    {preset.shortName} · {tourStep ? `Tour Step ${tourStep}/4` : 'Interactive Reference'}
+                    {preset.shortName} · {tourStep ? `Tour Step ${tourStep}/5` : 'Interactive Reference'}
                   </p>
                 </div>
               </div>
@@ -768,7 +925,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
                   onClick={() => runTourStep(1)}
                   className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-900 dark:text-teal-400 dark:hover:bg-teal-950/50 cursor-pointer whitespace-nowrap"
                 >
-                  4-Step Tour
+                  5-Step Tour
                 </button>
                 <button
                   type="button"
@@ -885,6 +1042,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
                     { key: 'all', label: 'All' },
                     { key: 'economics', label: 'Economics' },
                     { key: 'radar', label: 'Radar' },
+                    { key: 'pov', label: 'POV' },
                     { key: 'scoping', label: 'Scoping' },
                     { key: 'mcp', label: 'MCP' },
                   ] as { key: TabKey | 'all'; label: string }[]

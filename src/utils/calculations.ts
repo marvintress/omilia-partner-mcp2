@@ -5,6 +5,7 @@ import {
   CompetitorProfile,
   DealMetadata,
   PartnerMotion,
+  PovConfig,
   SovereigntyTier,
   UseCase,
   VerticalPreset,
@@ -216,6 +217,14 @@ export function isTopRightQuadrant(uc: Pick<UseCase, 'feas' | 'imp'>): boolean {
   return uc.feas >= 50 && uc.imp >= 50;
 }
 
+export function isBottomRightQuadrant(uc: Pick<UseCase, 'feas' | 'imp'>): boolean {
+  return uc.feas >= 50 && uc.imp < 50;
+}
+
+export function isHighFeasibilityQuadrant(uc: Pick<UseCase, 'feas'>): boolean {
+  return uc.feas >= 50;
+}
+
 export function getUseCasePsDays(uc: Pick<UseCase, 'feas'>): number {
   if (uc.feas >= 75) return 2;
   if (uc.feas >= 50) return 3;
@@ -282,8 +291,8 @@ export function calculateHlee(
 
   const guardrails = [
     intents === 0
-      ? 'Zero Phase 1 Scope Selected: Enable at least 1 Top-Right Quadrant use case in AI Radar 2.0 or above to generate a Phase 1 SOW boundary.'
-      : `Strict 80/20 Scope Fence: Phase 1 SOW locked to ${intents} Top-Right Quadrant intent${intents === 1 ? '' : 's'} (${includedList.map((u) => u.name).join(', ')}). Additional workflows gated to Phase 2 change order.`,
+      ? 'Zero Phase 1 Scope Selected: Enable at least 1 High-Feasibility (Top-Right or Bottom-Right, ≥50F) use case in AI Radar 2.0 or above to generate a Phase 1 SOW boundary.'
+      : `Strict 80/20 Scope Fence: Phase 1 SOW locked to ${intents} High-Feasibility (Top-Right + Bottom-Right) intent${intents === 1 ? '' : 's'} (${includedList.map((u) => u.name).join(', ')}). Lower-feasibility (<50F) workflows gated to Phase 2 change order.`,
     `Sub-300ms Latency Isolation: Omilia guarantees <300ms MCP orchestration + Lexis TTS (<45ms); customer/partner owns downstream ${preset.shortName} API response latency.`,
     apiReady === 'mainframe'
       ? 'Mainframe Middleware Gate: Customer/GSI must expose REST/MCP facade (e.g., IBM z/OS Connect or MQ REST bridge) prior to Sprint 2; 3270 screen-scraping is out of SLA scope.'
@@ -466,6 +475,273 @@ export function computeSensitivityScenarios(
   });
 }
 
+export interface PovExitGate {
+  metric: string;
+  threshold: string;
+  measurement: string;
+  scope: string;
+}
+
+export interface PovSprintWeek {
+  weekLabel: string;
+  title: string;
+  owner: string;
+  deliverables: string[];
+}
+
+export interface PovPlanResult {
+  heroIntents: UseCase[];
+  scopeStrategyLabel: string;
+  povWeeksMin: number;
+  povWeeksMax: number;
+  povDurationLabel: string;
+  competitorPovDurationLabel: string;
+  effectiveFeeUsd: number;
+  phase1CreditUsd: number;
+  netPhase1IncrementalCostUsd: number;
+  commercialLabel: string;
+  backendIsolationLabel: string;
+  infosecGateRisk: 'Low (Zero InfoSec Gate)' | 'Moderate (Non-Prod Allowlist)' | 'Elevated (SIP + Audio Leg)';
+  prerequisites: string[];
+  exitGates: PovExitGate[];
+  sprintWeeks: PovSprintWeek[];
+  conversionClause: string;
+  warnings: string[];
+}
+
+export function calculatePovPlan(
+  preset: VerticalPreset,
+  includedUseCases: UseCase[],
+  povConfig: PovConfig,
+  competitorArchetype: CompetitorArchetype,
+  phase1ImplementationCost: number
+): PovPlanResult {
+  const byTopFeasibility = (a: UseCase, b: UseCase) => b.feas - a.feas || b.imp - a.imp;
+  const strategy = povConfig.scopeStrategy ?? 'hybrid';
+  const clampedCount = Math.max(1, Math.min(3, povConfig.intentCount));
+
+  const topRightCandidates = includedUseCases.filter(isTopRightQuadrant).sort(byTopFeasibility);
+  const bottomRightCandidates = includedUseCases.filter(isBottomRightQuadrant).sort(byTopFeasibility);
+  const allCandidates = [...includedUseCases].filter(isHighFeasibilityQuadrant).sort(byTopFeasibility);
+
+  let heroIntents: UseCase[] = [];
+  if (strategy === 'top_right') {
+    heroIntents = topRightCandidates.slice(0, clampedCount);
+  } else if (strategy === 'bottom_right') {
+    heroIntents = bottomRightCandidates.slice(0, clampedCount);
+  } else {
+    // Hybrid: top-feasibility Top-Right + top-feasibility Bottom-Right, then fill by highest feasibility
+    if (clampedCount === 1) {
+      heroIntents = allCandidates.slice(0, 1);
+    } else {
+      const pickedIds = new Set<string>();
+      const seeded: UseCase[] = [];
+      if (topRightCandidates[0]) {
+        seeded.push(topRightCandidates[0]);
+        pickedIds.add(topRightCandidates[0].id);
+      }
+      if (bottomRightCandidates[0] && seeded.length < clampedCount) {
+        seeded.push(bottomRightCandidates[0]);
+        pickedIds.add(bottomRightCandidates[0].id);
+      }
+      for (const candidate of allCandidates) {
+        if (seeded.length >= clampedCount) break;
+        if (!pickedIds.has(candidate.id)) {
+          seeded.push(candidate);
+          pickedIds.add(candidate.id);
+        }
+      }
+      heroIntents = seeded.sort(byTopFeasibility);
+    }
+  }
+
+  const scopeStrategyLabels: Record<NonNullable<PovConfig['scopeStrategy']>, string> = {
+    hybrid: 'Hybrid (Top-Feasibility Top-Right + Bottom-Right)',
+    top_right: 'Top-Right Only (Immediate Funding ≥50F & ≥50I)',
+    bottom_right: 'Bottom-Right Only (Quick-Win RAG / FAQ ≥50F)',
+  };
+  const scopeStrategyLabel = scopeStrategyLabels[strategy];
+
+  let weeksMin = 2;
+  let weeksMax = 3;
+  if (povConfig.backendMode === 'sandbox_mock' && clampedCount <= 2 && !povConfig.includeTalkguardTest) {
+    weeksMin = 2;
+    weeksMax = 2;
+  } else if (povConfig.backendMode === 'sandbox_mock') {
+    weeksMin = 2;
+    weeksMax = 3;
+  } else if (povConfig.backendMode === 'nonprod_api') {
+    weeksMin = 3;
+    weeksMax = clampedCount >= 3 ? 4 : 3;
+  } else {
+    weeksMin = 3;
+    weeksMax = 4;
+  }
+
+  const povDurationLabel = weeksMin === weeksMax ? `${weeksMin} Weeks` : `${weeksMin}–${weeksMax} Weeks`;
+  const competitorPovDurationLabel =
+    competitorArchetype === 'byollm' ? '6–8 Weeks Multi-Vendor' : '8–12 Weeks Custom Build';
+
+  const effectiveFeeUsd =
+    povConfig.commercialModel === 'co_sell_free' ? 0 : Math.max(5000, povConfig.povFeeUsd);
+  const phase1CreditUsd =
+    povConfig.commercialModel === 'funded_credited'
+      ? Math.min(effectiveFeeUsd, phase1ImplementationCost)
+      : 0;
+  const netPhase1IncrementalCostUsd = Math.max(0, phase1ImplementationCost - phase1CreditUsd);
+
+  const commercialLabels: Record<PovConfig['commercialModel'], string> = {
+    co_sell_free: 'Partner-Funded Co-Sell POV ($0 Fee · 3-Wk Hard Cap)',
+    funded_credited: `Funded Fixed-Fee POV ($${effectiveFeeUsd.toLocaleString()} · 100% Credited to Phase 1)`,
+    paid_pilot: `Production-Path Paid Pilot ($${effectiveFeeUsd.toLocaleString()} · Live Audio Runtime)`,
+  };
+
+  const backendLabels: Record<PovConfig['backendMode'], string> = {
+    sandbox_mock: 'Synthetic / OpenAPI Sandbox Stub (Zero InfoSec Delay)',
+    nonprod_api: 'Non-Prod Test API / Customer MCP Bridge',
+    talkguard_sip: 'Live SIP Trunk + TalkGuard Voice Biometrics Leg',
+  };
+
+  const infosecGateRisk: PovPlanResult['infosecGateRisk'] =
+    povConfig.backendMode === 'sandbox_mock'
+      ? 'Low (Zero InfoSec Gate)'
+      : povConfig.backendMode === 'nonprod_api'
+      ? 'Moderate (Non-Prod Allowlist)'
+      : 'Elevated (SIP + Audio Leg)';
+
+  const primaryBackend = preset.backendStack.split(',')[0]?.trim() || 'Core Backend';
+
+  const prerequisites = [
+    `250–500 anonymized ${preset.shortName} call transcripts or knowledge PDFs covering ${
+      heroIntents.map((u) => u.name).join(' & ') || 'top feasibility intents'
+    }`,
+    povConfig.backendMode === 'sandbox_mock'
+      ? `Sample JSON payloads / OpenAPI 3.0 schema from ${primaryBackend} (mocked inside Omilia sandbox—no firewall/VPN ticket needed)`
+      : `Non-prod ${primaryBackend} REST/MCP endpoint credentials, mTLS test certs, and test customer account IDs`,
+    povConfig.backendMode === 'talkguard_sip' || povConfig.includeTalkguardTest
+      ? 'Test DID / SIP trunk routing rule (or WebRTC test harness) plus 10–15 synthetic/consented voice samples for TalkGuard EER verification'
+      : '1 dedicated SME + Product Owner committed for 2×30-min tuning reviews in Week 2',
+  ];
+
+  const exitGates: PovExitGate[] = [
+    {
+      metric: 'Day-1 Bootstrapped NLU Accuracy',
+      threshold: `≥ ${povConfig.nluTargetPct}%`,
+      measurement: 'Blind hold-out test set from prospect historical utterances',
+      scope: `${heroIntents.length} ${strategy === 'hybrid' ? 'hybrid' : 'bounded'} intent${heroIntents.length === 1 ? '' : 's'}`,
+    },
+    {
+      metric: 'In-Scope Task Resolution',
+      threshold: `≥ ${povConfig.taskTargetPct}%`,
+      measurement: 'End-to-end dialog completion across happy + grounded RAG paths',
+      scope: 'Deterministic + RAG orchestration',
+    },
+    {
+      metric: 'End-to-End Voice Turn Latency',
+      threshold: `< ${povConfig.latencyTargetMs.toLocaleString()} ms`,
+      measurement: '8kHz ASR → Parallel MCP → <45ms Lexis TTS vs. 1,200ms hang-up line',
+      scope: 'Omilia Core + Sandbox/MCP',
+    },
+    {
+      metric: 'Data Sovereignty & Security',
+      threshold: '0 External Egress',
+      measurement: `Audit log inspection confirming zero third-party LLM calls (${preset.compliance[0]})`,
+      scope: 'Certified Walled Garden',
+    },
+  ];
+
+  if (povConfig.includeTalkguardTest) {
+    exitGates.push({
+      metric: 'TalkGuard Passive Biometrics & Deepfake Screen',
+      threshold: 'Pass (<1% FAR / Anti-Spoof)',
+      measurement: 'Passive enrollment + cloned-voice replay rejection test',
+      scope: `Target -${preset.roi.talkguardSec}s KBA reduction`,
+    });
+  }
+
+  const sprintWeeks: PovSprintWeek[] = [
+    {
+      weekLabel: 'Week 1',
+      title: 'AI Bootstrapping & Environment Setup',
+      owner: 'Omilia SE + Partner SME',
+      deliverables: [
+        `Ingest ${preset.shortName} transcripts & knowledge docs for ${heroIntents.length} top-feasibility ${strategy === 'hybrid' ? 'hybrid ' : ''}intent${heroIntents.length === 1 ? '' : 's'}`,
+        povConfig.backendMode === 'sandbox_mock'
+          ? `Spin up OpenAPI / JSON mock MCP stubs for ${preset.mcpSystems.slice(0, 2).map((s) => s.name).join(' & ')}`
+          : `Connect non-prod MCP server (${primaryBackend}) via OAuth 2.0 + mTLS`,
+      ],
+    },
+    {
+      weekLabel: 'Week 2',
+      title: 'Micro-Flow Tuning, Latency & Biometric QA',
+      owner: 'Omilia Dialog Architect + Buyer QA',
+      deliverables: [
+        `Tune edge cases, barge-in, and 8kHz acoustic noise handling toward ≥${povConfig.nluTargetPct}% NLU / ≥${povConfig.taskTargetPct}% Task Res`,
+        povConfig.includeTalkguardTest
+          ? `Validate TalkGuard passive KBA (-${preset.roi.talkguardSec}s) & anti-deepfake screening`
+          : `Benchmark sub-${povConfig.latencyTargetMs}ms turn latency with <45ms Lexis TTS`,
+      ],
+    },
+    {
+      weekLabel: weeksMax >= 4 ? 'Weeks 3–4' : 'Week 3',
+      title: 'Live Caller UAT & Phase 1 Conversion Gate',
+      owner: 'Buyer Sponsor + CFO / Partner Lead',
+      deliverables: [
+        'Run live scripted & unscripted blind test suite against agreed Exit Criteria scorecard',
+        `Trigger pre-agreed Phase 1 SOW conversion (${phase1CreditUsd > 0 ? `$${phase1CreditUsd.toLocaleString()} POV fee credited 100%` : 'full production rollout'})`,
+      ],
+    },
+  ];
+
+  const warnings: string[] = [];
+  if (heroIntents.length === 0) {
+    warnings.push(
+      `No matching High-Feasibility (${strategy === 'top_right' ? 'Top-Right' : strategy === 'bottom_right' ? 'Bottom-Right' : 'Top-Right or Bottom-Right'}) use cases are enabled in AI Radar.`
+    );
+  } else if (strategy === 'hybrid' && clampedCount >= 2 && (topRightCandidates.length === 0 || bottomRightCandidates.length === 0)) {
+    warnings.push(
+      'Hybrid mode pairs Top-Right + Bottom-Right workflows; add or enable a use case in the missing right-hand quadrant on AI Radar 2.0.'
+    );
+  }
+  if (clampedCount >= 3) {
+    warnings.push(
+      '3 intents stretches POV scope risk—2 intents (e.g., 1 Top-Right + 1 Bottom-Right Hybrid) maximizes Day-1 accuracy inside 2–3 weeks.'
+    );
+  }
+  if (povConfig.backendMode !== 'sandbox_mock') {
+    warnings.push(
+      'Non-prod/SIP integration adds customer firewall & InfoSec lead time; keep OpenAPI sandbox stubs ready as a Week-1 fallback.'
+    );
+  }
+
+  const conversionClause =
+    povConfig.commercialModel === 'funded_credited'
+      ? `Upon achieving ≥${povConfig.nluTargetPct}% NLU accuracy, ≥${povConfig.taskTargetPct}% task resolution, and <${povConfig.latencyTargetMs}ms voice latency, 100% of the $${effectiveFeeUsd.toLocaleString()} POV fee is credited toward Phase 1 PS (${formatCurrencyFull(netPhase1IncrementalCostUsd)} remaining Phase 1 balance).`
+      : povConfig.commercialModel === 'paid_pilot'
+      ? `Paid Pilot runtime promotes directly into Phase 1 production upon meeting Exit Criteria (≥${povConfig.nluTargetPct}% NLU, ≥${povConfig.taskTargetPct}% Task Res, <${povConfig.latencyTargetMs}ms latency), compressing Phase 1 kickoff lead time.`
+      : `Co-Sell POV runs strictly for ${povDurationLabel} on ${heroIntents.length} bounded intent${heroIntents.length === 1 ? '' : 's'}; hitting the Exit Criteria converts directly into the scoped Phase 1 SOW.`;
+
+  return {
+    heroIntents,
+    scopeStrategyLabel,
+    povWeeksMin: weeksMin,
+    povWeeksMax: weeksMax,
+    povDurationLabel,
+    competitorPovDurationLabel,
+    effectiveFeeUsd,
+    phase1CreditUsd,
+    netPhase1IncrementalCostUsd,
+    commercialLabel: commercialLabels[povConfig.commercialModel],
+    backendIsolationLabel: backendLabels[povConfig.backendMode],
+    infosecGateRisk,
+    prerequisites,
+    exitGates,
+    sprintWeeks,
+    conversionClause,
+    warnings,
+  };
+}
+
 export function buildExecutiveDealBrief(params: {
   preset: VerticalPreset;
   inputs: RoiInputs;
@@ -477,6 +753,7 @@ export function buildExecutiveDealBrief(params: {
   psDayRate: number;
   payback: PaybackAnalysis;
   dealMeta: DealMetadata;
+  povPlan?: PovPlanResult;
 }): string {
   const {
     preset,
@@ -489,6 +766,7 @@ export function buildExecutiveDealBrief(params: {
     psDayRate,
     payback,
     dealMeta,
+    povPlan,
   } = params;
   const comp = results.competitorProfile;
   const includedLines =
@@ -508,6 +786,20 @@ export function buildExecutiveDealBrief(params: {
     dealMeta.dealOwner ? `Deal Owner: ${dealMeta.dealOwner}` : null,
   ].filter(Boolean);
 
+  const povLines = povPlan
+    ? [
+        ``,
+        `INITIAL POV / POC CHARTER (${povPlan.povDurationLabel} vs. ${povPlan.competitorPovDurationLabel} on ${comp.shortLabel}):`,
+        `- Intent Strategy: ${povPlan.scopeStrategyLabel}`,
+        `- Bounded Hero Intents (${povPlan.heroIntents.length}): ${
+          povPlan.heroIntents.map((u) => u.name).join(', ') || 'Pending High-Feasibility selection'
+        }`,
+        `- Backend Isolation: ${povPlan.backendIsolationLabel}`,
+        `- Commercial Posture: ${povPlan.commercialLabel}`,
+        `- Conversion Clause: ${povPlan.conversionClause}`,
+      ]
+    : [];
+
   return [
     `OMILIA ENTERPRISE CX DEAL BRIEF — ${preset.name.toUpperCase()}`,
     `================================================================`,
@@ -523,11 +815,12 @@ export function buildExecutiveDealBrief(params: {
     ``,
     `INCLUDED PHASE 1 USE CASES (${includedUseCases.length} Scoped from AI Radar 2.0):`,
     includedLines,
+    ...povLines,
     ``,
     `PARTNER SCOPING & HLEE GUARDRAILS:`,
     `- GTM Motion: ${motionLabel}`,
     `- Deployment: ${sovereigntyLabel}`,
-    `- Phase 1 Estimate: ${hlee.timelineLabel} / ${hlee.psEffortLabel} (95%+ Day-1 accuracy via AI Bootstrapping)`,
+    `- Phase 1 Estimate: ${hlee.timelineLabel} / ${hlee.psEffortLabel} (96%+ Day-1 NLU via AI Bootstrapping)`,
     `- Compliance Perimeter: ${preset.compliance.join(', ')}`,
     `- Target Backend Stack: ${preset.backendStack}`,
     `- Architecture Guarantee: Zero Third-Party Egress (PCI L1 / FedRAMP-ready) | <1s Voice Latency (<45ms Lexis TTS) | Native TalkGuard | 100% CCaaS Neutral`,
@@ -552,9 +845,25 @@ export function buildDealCsv(params: {
   payback: PaybackAnalysis;
   sensitivity: SensitivityScenario[];
   dealMeta: DealMetadata;
+  povPlan?: PovPlanResult;
 }): string {
-  const { preset, inputs, results, useCases, hlee, psDayRate, payback, sensitivity, dealMeta } = params;
+  const { preset, inputs, results, useCases, hlee, psDayRate, payback, sensitivity, dealMeta, povPlan } = params;
   const comp = results.competitorProfile;
+  const povCsvRows: string[][] = povPlan
+    ? [
+        [],
+        ['INITIAL POV / POC CHARTER', 'Value'],
+        ['POV Intent Strategy', povPlan.scopeStrategyLabel],
+        ['POV Duration (Omilia vs Competitor)', `${povPlan.povDurationLabel} vs ${povPlan.competitorPovDurationLabel}`],
+        ['Bounded Hero Intents', povPlan.heroIntents.map((u) => u.name).join(' | ') || 'None'],
+        ['Backend Isolation Mode', povPlan.backendIsolationLabel],
+        ['Commercial Posture', povPlan.commercialLabel],
+        ['POV Fee (USD)', povPlan.effectiveFeeUsd.toString()],
+        ['Phase 1 Credit (USD)', povPlan.phase1CreditUsd.toString()],
+        ...povPlan.exitGates.map((g) => [`Exit Gate: ${g.metric}`, `${g.threshold} (${g.measurement})`]),
+      ]
+    : [];
+
   const rows: string[][] = [
     ['Omilia Partner Workbench Export', preset.name],
     ['Competitive Comparison Baseline', `${comp.title} (${comp.examples})`],
@@ -595,11 +904,12 @@ export function buildDealCsv(params: {
       s.paybackMonths !== null ? s.paybackMonths.toFixed(1) : 'N/A',
       Math.round(s.ftesFreed).toString(),
     ]),
+    ...povCsvRows,
     [],
     ['AI RADAR 2.0 PORTFOLIO', 'Quadrant', 'Feasibility', 'Impact', 'Phase 1 SOW Included', 'PS Days', 'Runtime Tier'],
     ...useCases.map((uc) => {
       const q = getQuadrantMeta(uc.feas, uc.imp);
-      const included = isTopRightQuadrant(uc) && uc.included !== false;
+      const included = isHighFeasibilityQuadrant(uc) && uc.included !== false;
       return [
         uc.name,
         q.label,

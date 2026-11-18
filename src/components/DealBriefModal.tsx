@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Copy, Download, Printer, X } from 'lucide-react';
+import { Check, Copy, Download, Presentation, Printer, X } from 'lucide-react';
 import { DealMetadata, UseCase, VerticalPreset } from '../data/verticalPresets';
 import {
   formatCurrencyCompact,
@@ -7,6 +7,7 @@ import {
   getUseCasePsDays,
   HleeResult,
   PaybackAnalysis,
+  PovPlanResult,
   RoiInputs,
   RoiResults,
 } from '../utils/calculations';
@@ -23,11 +24,14 @@ interface DealBriefModalProps {
   hlee: HleeResult;
   psDayRate: number;
   payback: PaybackAnalysis;
+  povPlan?: PovPlanResult;
   dealMeta: DealMetadata;
   onUpdateDealMeta: <K extends keyof DealMetadata>(key: K, val: DealMetadata[K]) => void;
   briefText: string;
   onCopyBrief: () => void;
   onDownloadCsv: () => void;
+  onDownloadDeck: () => void;
+  isExportingDeck: boolean;
   copied: boolean;
 }
 
@@ -43,11 +47,14 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
   hlee,
   psDayRate,
   payback,
+  povPlan,
   dealMeta,
   onUpdateDealMeta,
   briefText,
   onCopyBrief,
   onDownloadCsv,
+  onDownloadDeck,
+  isExportingDeck,
   copied,
 }) => {
   if (!open) return null;
@@ -84,6 +91,15 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied Brief' : 'Copy Text'}
+            </button>
+            <button
+              type="button"
+              onClick={onDownloadDeck}
+              disabled={isExportingDeck}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 transition-colors hover:bg-teal-100 disabled:opacity-60 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-950 cursor-pointer whitespace-nowrap"
+            >
+              <Presentation className="h-3.5 w-3.5" />
+              {isExportingDeck ? 'Building Deck...' : 'Download Deck (.pptx)'}
             </button>
             <button
               type="button"
@@ -238,6 +254,18 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
                     {preset.compliance.slice(0, 3).join(' · ')}
                   </dd>
                 </div>
+                {povPlan && (
+                  <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5 dark:border-slate-800">
+                    <dt className="text-slate-500 dark:text-slate-400">Initial POV / POC</dt>
+                    <dd className="font-medium text-right text-teal-700 dark:text-teal-400">
+                      {povPlan.povDurationLabel} ({povPlan.heroIntents.length} Hero Intents ·{' '}
+                      {povPlan.effectiveFeeUsd === 0
+                        ? 'Co-Sell $0'
+                        : formatCurrencyFull(povPlan.effectiveFeeUsd)}
+                      )
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
 
@@ -246,7 +274,7 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
                 Included Phase 1 Use Cases ({includedUseCases.length})
               </h3>
               {includedUseCases.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No Phase 1 Top-Right use cases selected.</p>
+                <p className="text-xs text-slate-500 italic">No High-Feasibility (Top-Right / Bottom-Right) use cases selected.</p>
               ) : (
                 <ul className="space-y-1.5 text-xs">
                   {includedUseCases.map((uc) => (
