@@ -1,0 +1,668 @@
+import React, { useState } from 'react';
+import { Copy, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react';
+import { UseCase, VerticalPreset } from '../data/verticalPresets';
+import { getQuadrantMeta, isTopRightQuadrant } from '../utils/calculations';
+
+interface AiRadarTabProps {
+  preset: VerticalPreset;
+  useCases: UseCase[];
+  selectedId: string | null;
+  onSelectUseCase: (id: string) => void;
+  onToggleInclude: (id: string) => void;
+  onDeleteUseCase: (id: string) => void;
+  onAddCustomUseCase: (name: string, feas: number, imp: number) => void;
+  onClearAll: () => void;
+  onRestoreDefaults: () => void;
+  onCopyRadarSummary: () => void;
+}
+
+type PortfolioFilter = 'all' | 'phase1' | 'deferred';
+
+export const AiRadarTab: React.FC<AiRadarTabProps> = ({
+  preset,
+  useCases,
+  selectedId,
+  onSelectUseCase,
+  onToggleInclude,
+  onDeleteUseCase,
+  onAddCustomUseCase,
+  onClearAll,
+  onRestoreDefaults,
+  onCopyRadarSummary,
+}) => {
+  const [customName, setCustomName] = useState('');
+  const [customFeas, setCustomFeas] = useState(78);
+  const [customImp, setCustomImp] = useState(84);
+  const [filter, setFilter] = useState<PortfolioFilter>('all');
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const selectedUc = useCases.find((u) => u.id === selectedId) ?? useCases[0] ?? null;
+
+  const filteredUseCases = useCases.filter((uc) => {
+    const inPhase1 = isTopRightQuadrant(uc) && uc.included !== false;
+    if (filter === 'phase1') return inPhase1;
+    if (filter === 'deferred') return !inPhase1;
+    return true;
+  });
+
+  const handlePlotSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = customName.trim();
+    if (!trimmed) return;
+    const f = Math.min(99, Math.max(5, Number(customFeas) || 75));
+    const i = Math.min(99, Math.max(5, Number(customImp) || 80));
+    onAddCustomUseCase(trimmed, f, i);
+    setCustomName('');
+  };
+
+  // SVG Coordinate System
+  const W = 680;
+  const H = 440;
+  const padL = 54;
+  const padR = 24;
+  const padT = 26;
+  const padB = 44;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const toX = (feas: number) => padL + (feas / 100) * plotW;
+  const toY = (imp: number) => padT + ((100 - imp) / 100) * plotH;
+  const midX = toX(50);
+  const midY = toY(50);
+
+  const toneTextColors: Record<'teal' | 'amber' | 'blue' | 'rose', string> = {
+    teal: 'text-teal-700 dark:text-teal-400',
+    amber: 'text-amber-700 dark:text-amber-400',
+    blue: 'text-sky-700 dark:text-sky-400',
+    rose: 'text-rose-700 dark:text-rose-400',
+  };
+
+  const getPinStrokeColor = (uc: UseCase) => {
+    if (isTopRightQuadrant(uc)) {
+      return uc.included !== false ? '#0d9488' : '#64748b';
+    }
+    const q = getQuadrantMeta(uc.feas, uc.imp);
+    if (q.tone === 'amber') return '#d97706';
+    if (q.tone === 'blue') return '#0284c7';
+    return '#e11d48';
+  };
+
+  const includedCount = useCases.filter((u) => isTopRightQuadrant(u) && u.included !== false).length;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left 7 Columns: 2x2 Matrix + Custom Use-Case Builder */}
+        <div className="lg:col-span-7 space-y-6">
+          <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
+              <div>
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  AI Radar 2.0: Feasibility &amp; Data Maturity vs. Strategic Impact
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {preset.name} · {useCases.length} plotted ({includedCount} in Phase 1 SOW)
+                </p>
+              </div>
+              <div className="no-print flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={onClearAll}
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-50 dark:border-slate-700 dark:text-rose-400 dark:hover:bg-rose-950/40 whitespace-nowrap cursor-pointer"
+                >
+                  Clear All
+                </button>
+                <button
+                  type="button"
+                  onClick={onRestoreDefaults}
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 whitespace-nowrap cursor-pointer"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reload Defaults
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive SVG 2x2 Matrix */}
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950">
+              <svg
+                viewBox={`0 0 ${W} ${H}`}
+                className="block w-full h-auto select-none"
+                role="img"
+                aria-label="AI Radar 2.0 2x2 use case prioritization matrix"
+              >
+                {/* Top-Right Phase 1 Funding Zone */}
+                <rect
+                  x={midX}
+                  y={padT}
+                  width={padL + plotW - midX}
+                  height={midY - padT}
+                  className="fill-teal-500/8 dark:fill-teal-400/10"
+                />
+                {/* Top-Left Training Wheels Zone */}
+                <rect
+                  x={padL}
+                  y={padT}
+                  width={midX - padL}
+                  height={midY - padT}
+                  className="fill-amber-500/5 dark:fill-amber-400/5"
+                />
+
+                {/* Gridlines */}
+                {[25, 75].map((tick) => (
+                  <g key={tick}>
+                    <line
+                      x1={toX(tick)}
+                      y1={padT}
+                      x2={toX(tick)}
+                      y2={padT + plotH}
+                      className="stroke-slate-200 dark:stroke-slate-800"
+                      strokeWidth="1"
+                    />
+                    <line
+                      x1={padL}
+                      y1={toY(tick)}
+                      x2={padL + plotW}
+                      y2={toY(tick)}
+                      className="stroke-slate-200 dark:stroke-slate-800"
+                      strokeWidth="1"
+                    />
+                  </g>
+                ))}
+
+                {/* Outer Border */}
+                <rect
+                  x={padL}
+                  y={padT}
+                  width={plotW}
+                  height={plotH}
+                  fill="none"
+                  className="stroke-slate-300 dark:stroke-slate-700"
+                  strokeWidth="1"
+                />
+
+                {/* 50 / 50 Midpoint Dividers */}
+                <line
+                  x1={midX}
+                  y1={padT}
+                  x2={midX}
+                  y2={padT + plotH}
+                  className="stroke-slate-400 dark:stroke-slate-600"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+                <line
+                  x1={padL}
+                  y1={midY}
+                  x2={padL + plotW}
+                  y2={midY}
+                  className="stroke-slate-400 dark:stroke-slate-600"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+
+                {/* Quadrant Headers */}
+                <text
+                  x={midX + 12}
+                  y={padT + 18}
+                  className="fill-teal-700 dark:fill-teal-400 text-[11px] font-bold"
+                >
+                  Phase 1 Immediate Funding (≥50F, ≥50I)
+                </text>
+                <text
+                  x={padL + 12}
+                  y={padT + 18}
+                  className="fill-amber-700 dark:fill-amber-400 text-[11px] font-semibold"
+                >
+                  Phase 2 Training Wheels (HITL)
+                </text>
+                <text
+                  x={midX + 12}
+                  y={padT + plotH - 10}
+                  className="fill-sky-700 dark:fill-sky-400 text-[11px] font-medium"
+                >
+                  Quick Wins (Grounded RAG / FAQ)
+                </text>
+                <text
+                  x={padL + 12}
+                  y={padT + plotH - 10}
+                  className="fill-slate-500 dark:fill-slate-400 text-[11px] font-medium"
+                >
+                  Defer / Deprioritize
+                </text>
+
+                {/* Axis Titles */}
+                <text
+                  x={padL + plotW / 2}
+                  y={H - 12}
+                  textAnchor="middle"
+                  className="fill-slate-600 dark:fill-slate-400 text-[11px] font-semibold"
+                >
+                  Feasibility &amp; Backend API / Data Maturity (0–100) →
+                </text>
+                <text
+                  x={16}
+                  y={padT + plotH / 2}
+                  textAnchor="middle"
+                  transform={`rotate(-90 16 ${padT + plotH / 2})`}
+                  className="fill-slate-600 dark:fill-slate-400 text-[11px] font-semibold"
+                >
+                  Financial &amp; CX Impact (0–100) →
+                </text>
+
+                {/* Plotted Use Case Nodes */}
+                {useCases.map((uc, idx) => {
+                  const cx = toX(uc.feas);
+                  const cy = toY(uc.imp);
+                  const isSelected = selectedUc?.id === uc.id;
+                  const isHovered = hoveredId === uc.id;
+                  const inTopRight = isTopRightQuadrant(uc);
+                  const isExcluded = inTopRight && uc.included === false;
+                  const color = getPinStrokeColor(uc);
+                  const alignRight = uc.feas > 74;
+                  const labelX = alignRight ? cx - 12 : cx + 12;
+                  const anchor = alignRight ? 'end' : 'start';
+                  const shortLabel = uc.name.length > 26 ? `${uc.name.slice(0, 24)}…` : uc.name;
+
+                  return (
+                    <g
+                      key={uc.id}
+                      onClick={() => onSelectUseCase(uc.id)}
+                      onMouseEnter={() => setHoveredId(uc.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      style={{ cursor: 'pointer' }}
+                      opacity={isExcluded ? 0.5 : 1}
+                    >
+                      {isSelected && (
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={14}
+                          fill="none"
+                          stroke={color}
+                          strokeWidth="2"
+                          strokeDasharray="3 2"
+                        />
+                      )}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={isSelected || isHovered ? 8.5 : 7}
+                        fill={color}
+                        className="stroke-white dark:stroke-slate-900"
+                        strokeWidth="2"
+                      />
+                      <text
+                        x={cx}
+                        y={cy + 3.5}
+                        textAnchor="middle"
+                        className="fill-white text-[8.5px] font-mono font-bold pointer-events-none"
+                      >
+                        {idx + 1}
+                      </text>
+                      <text
+                        x={labelX}
+                        y={cy + 3.5}
+                        textAnchor={anchor}
+                        className={`text-[10.5px] pointer-events-none ${
+                          isSelected
+                            ? 'fill-slate-900 dark:fill-slate-50 font-bold'
+                            : 'fill-slate-700 dark:fill-slate-300 font-medium'
+                        }`}
+                      >
+                        {shortLabel}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          </section>
+
+          {/* Plot Custom Prospect Use Case Live */}
+          <section className="no-print rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-4">
+              <h3 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                Plot Custom Prospect Use Case Live
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Add client-specific call drivers during live discovery workshops
+              </p>
+            </div>
+
+            <form onSubmit={handlePlotSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-6">
+                <label
+                  htmlFor="inpCustomUcName"
+                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
+                >
+                  Use Case Name
+                </label>
+                <input
+                  id="inpCustomUcName"
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="e.g., Smart Meter Outage Callback"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="inpCustomUcFeas"
+                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
+                >
+                  Feasibility
+                </label>
+                <input
+                  id="inpCustomUcFeas"
+                  type="number"
+                  min={5}
+                  max={99}
+                  value={customFeas}
+                  onChange={(e) => setCustomFeas(Number(e.target.value))}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs tabular-nums text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="inpCustomUcImp"
+                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
+                >
+                  Impact
+                </label>
+                <input
+                  id="inpCustomUcImp"
+                  type="number"
+                  min={5}
+                  max={99}
+                  value={customImp}
+                  onChange={(e) => setCustomImp(Number(e.target.value))}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs tabular-nums text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <button
+                  type="submit"
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Plot
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        {/* Right 5 Columns: Inspector + Portfolio List */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Runtime & Rollout Inspector */}
+          <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4 dark:border-slate-800">
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                Runtime &amp; Rollout Inspector
+              </div>
+              {selectedUc && (
+                <div className="no-print flex items-center gap-2">
+                  {isTopRightQuadrant(selectedUc) && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleInclude(selectedUc.id)}
+                      className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                        selectedUc.included !== false
+                          ? 'border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-500 dark:bg-teal-950/60 dark:text-teal-300'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {selectedUc.included !== false ? 'Included in Phase 1 SOW' : 'Excluded (Click to Include)'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onDeleteUseCase(selectedUc.id)}
+                    aria-label={`Delete ${selectedUc.name}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 dark:border-slate-700 dark:text-rose-400 dark:hover:bg-rose-950/40 cursor-pointer"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {selectedUc ? (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 text-xs mb-1">
+                    <span className={`font-semibold ${toneTextColors[getQuadrantMeta(selectedUc.feas, selectedUc.imp).tone]}`}>
+                      {getQuadrantMeta(selectedUc.feas, selectedUc.imp).label}
+                    </span>
+                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+                    <span className="font-mono tabular-nums text-slate-600 dark:text-slate-400">
+                      Feasibility {selectedUc.feas}/100 · Impact {selectedUc.imp}/100
+                    </span>
+                  </div>
+                  <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-50">
+                    {selectedUc.name}
+                  </h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                    {selectedUc.desc}
+                  </p>
+                </div>
+
+                <dl className="divide-y divide-slate-100 border-t border-slate-100 text-xs dark:divide-slate-800 dark:border-slate-800">
+                  <div className="py-3">
+                    <dt className="font-semibold text-teal-700 dark:text-teal-400 mb-1">
+                      Recommended Omilia Runtime Tier
+                    </dt>
+                    <dd className="font-medium text-slate-900 dark:text-slate-100">{selectedUc.runtime}</dd>
+                  </div>
+                  <div className="py-3">
+                    <dt className="font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Phased &ldquo;Training Wheels&rdquo; Rollout Plan
+                    </dt>
+                    <dd className="leading-relaxed text-slate-600 dark:text-slate-400">{selectedUc.rollout}</dd>
+                  </div>
+                  <div className="pt-3">
+                    <dt className="font-semibold text-amber-700 dark:text-amber-400 mb-1">
+                      Glass Box &amp; HITL Governance Gate
+                    </dt>
+                    <dd className="leading-relaxed text-slate-600 dark:text-slate-400">{selectedUc.gov}</dd>
+                  </div>
+                </dl>
+              </div>
+            ) : (
+              <div className="py-10 text-center">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">No Use Cases Plotted</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Add a custom prospect use case on the left or reload the {preset.shortName} defaults.
+                </p>
+                <button
+                  type="button"
+                  onClick={onRestoreDefaults}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-teal-800 dark:bg-teal-600 cursor-pointer"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reload Default Use Cases
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Vertical Use-Case Portfolio List */}
+          <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3.5 dark:border-slate-800">
+              <div>
+                <h3 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  Vertical Use-Case Portfolio
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                  {useCases.length} intents · {includedCount} scoped in Phase 1
+                </p>
+              </div>
+
+              <div className="no-print inline-flex items-center rounded-lg bg-slate-100 p-0.5 dark:bg-slate-950">
+                {(
+                  [
+                    { key: 'all', label: 'All' },
+                    { key: 'phase1', label: 'Phase 1' },
+                    { key: 'deferred', label: 'Phase 2+' },
+                  ] as { key: PortfolioFilter; label: string }[]
+                ).map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setFilter(tab.key)}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                      filter === tab.key
+                        ? 'bg-white text-slate-900 shadow-xs font-semibold dark:bg-slate-800 dark:text-slate-50'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-3 max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredUseCases.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                  No use cases match the current filter.
+                </div>
+              ) : (
+                filteredUseCases.map((uc) => {
+                  const inTopRight = isTopRightQuadrant(uc);
+                  const isIncluded = inTopRight && uc.included !== false;
+                  const isSelected = selectedUc?.id === uc.id;
+                  const q = getQuadrantMeta(uc.feas, uc.imp);
+
+                  return (
+                    <div
+                      key={uc.id}
+                      onClick={() => onSelectUseCase(uc.id)}
+                      className={`flex items-center justify-between gap-3 py-2.5 px-2 -mx-2 rounded-lg cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-teal-50/80 dark:bg-teal-950/40'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        {inTopRight ? (
+                          <input
+                            type="checkbox"
+                            checked={isIncluded}
+                            aria-label={`Include ${uc.name} in Phase 1 SOW`}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => onToggleInclude(uc.id)}
+                            className="h-3.5 w-3.5 rounded accent-teal-600 cursor-pointer shrink-0"
+                          />
+                        ) : (
+                          <span
+                            className="w-3.5 text-center text-[11px] text-slate-400 shrink-0"
+                            title="Outside Top-Right Quadrant"
+                          >
+                            —
+                          </span>
+                        )}
+                        <span
+                          className={`truncate text-xs font-medium ${
+                            inTopRight && !isIncluded
+                              ? 'line-through text-slate-400 dark:text-slate-500'
+                              : 'text-slate-800 dark:text-slate-200'
+                          }`}
+                        >
+                          {uc.name}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`font-mono text-[11px] tabular-nums font-medium ${toneTextColors[q.tone]}`}>
+                          {uc.feas}F / {uc.imp}I
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteUseCase(uc.id);
+                          }}
+                          aria-label={`Delete ${uc.name}`}
+                          className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 cursor-pointer"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="no-print mt-4 flex items-center gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer whitespace-nowrap"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print / Export PDF
+              </button>
+              <button
+                type="button"
+                onClick={onCopyRadarSummary}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer whitespace-nowrap"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy Summary
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* Print-Only Complete Matrix */}
+      <section className="print-only rounded-xl border border-slate-300 bg-white p-5">
+        <h3 className="font-display text-sm font-bold text-slate-900">
+          AI Radar 2.0 — Complete Discovery Specifications ({preset.name})
+        </h3>
+        <table className="mt-3 w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className="border-b border-slate-300 text-slate-600">
+              <th className="py-2 pr-4">Use Case &amp; Scope Status</th>
+              <th className="py-2 pr-4">Scores &amp; Quadrant</th>
+              <th className="py-2 pr-4">Recommended Runtime Tier</th>
+              <th className="py-2">Rollout &amp; Governance Gate</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {useCases.map((uc) => {
+              const q = getQuadrantMeta(uc.feas, uc.imp);
+              const isTopRight = isTopRightQuadrant(uc);
+              const status =
+                isTopRight && uc.included !== false
+                  ? 'Phase 1 SOW Included'
+                  : isTopRight
+                  ? 'Top-Right (Excluded)'
+                  : 'Phase 2/3';
+              return (
+                <tr key={uc.id}>
+                  <td className="py-2 pr-4 font-medium">
+                    {uc.name}
+                    <div className="text-[11px] text-slate-500">{status}</div>
+                  </td>
+                  <td className="py-2 pr-4 font-mono tabular-nums">
+                    {uc.feas}F / {uc.imp}I · {q.label}
+                  </td>
+                  <td className="py-2 pr-4">{uc.runtime}</td>
+                  <td className="py-2 text-[11px] text-slate-600">
+                    <div>{uc.rollout}</div>
+                    <div className="mt-0.5 text-slate-500">{uc.gov}</div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
+};

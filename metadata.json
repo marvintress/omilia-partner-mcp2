@@ -1,0 +1,6 @@
+{
+  "name": "Omilia Partner Workbench",
+  "description": "Enterprise CX Unit Economics, AI Radar 2.0 Use-Case Prioritizer, Partner Deal-Scoping & SOW Guardrails, and Live MCP Protocol Inspector.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
