@@ -404,7 +404,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
   ];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-12 print:block print:space-y-5 gap-6 items-start">
       {/* Left 6 Columns: Orchestration Controls & Latency Waterfall */}
       <div className="lg:col-span-6 space-y-6">
         <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
@@ -786,13 +786,13 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyJson('req', reqJson)}
-                  className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
+                  className="no-print inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   {copiedPane === 'req' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                   {copiedPane === 'req' ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <pre className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-950 p-4 font-mono text-[11.5px] leading-relaxed text-sky-300 dark:border-slate-800">
+              <pre className="max-h-56 overflow-auto print:max-h-none print:overflow-visible rounded-lg border border-slate-200 bg-slate-950 p-4 font-mono text-[11.5px] leading-relaxed text-sky-300 dark:border-slate-800">
                 {reqJson}
               </pre>
             </div>
@@ -806,13 +806,13 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyJson('res', resJson)}
-                  className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
+                  className="no-print inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   {copiedPane === 'res' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                   {copiedPane === 'res' ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <pre className="max-h-72 overflow-auto rounded-lg border border-slate-200 bg-slate-950 p-4 font-mono text-[11.5px] leading-relaxed text-emerald-300 dark:border-slate-800">
+              <pre className="max-h-72 overflow-auto print:max-h-none print:overflow-visible rounded-lg border border-slate-200 bg-slate-950 p-4 font-mono text-[11.5px] leading-relaxed text-emerald-300 dark:border-slate-800">
                 {resJson}
               </pre>
             </div>

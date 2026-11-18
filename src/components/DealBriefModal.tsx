@@ -1,6 +1,6 @@
 import React from 'react';
 import { Check, Copy, Download, Presentation, Printer, X } from 'lucide-react';
-import { DealMetadata, UseCase, VerticalPreset } from '../data/verticalPresets';
+import { BYOLLM_STACK_TIERS, DealMetadata, UseCase, VerticalPreset } from '../data/verticalPresets';
 import {
   formatCurrencyCompact,
   formatCurrencyFull,
@@ -31,6 +31,7 @@ interface DealBriefModalProps {
   onCopyBrief: () => void;
   onDownloadCsv: () => void;
   onDownloadDeck: () => void;
+  onPrintBrief: () => void;
   isExportingDeck: boolean;
   copied: boolean;
 }
@@ -54,6 +55,7 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
   onCopyBrief,
   onDownloadCsv,
   onDownloadDeck,
+  onPrintBrief,
   isExportingDeck,
   copied,
 }) => {
@@ -111,7 +113,7 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={onPrintBrief}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer whitespace-nowrap"
             >
               <Printer className="h-3.5 w-3.5" />
@@ -247,7 +249,11 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
                 <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5 dark:border-slate-800">
                   <dt className="text-slate-500 dark:text-slate-400">Competitive Baseline</dt>
                   <dd className="font-medium text-right text-slate-900 dark:text-slate-100">
-                    {results.competitorProfile.title} ({results.competitorProfile.examples})
+                    {results.competitorProfile.title}
+                    {results.competitorProfile.key === 'byollm'
+                      ? ` · ${BYOLLM_STACK_TIERS[results.byollmStackTier].shortLabel}`
+                      : ''}{' '}
+                    ({results.competitorProfile.examples})
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5 dark:border-slate-800">

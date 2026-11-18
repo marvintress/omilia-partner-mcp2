@@ -18,6 +18,8 @@ import { WorkbenchGuideWidget } from './components/WorkbenchGuideWidget';
 import { WorkspaceBar } from './components/WorkspaceBar';
 import {
   ApiReadiness,
+  BYOLLM_STACK_TIERS,
+  ByollmStackTier,
   COMPETITOR_PROFILES,
   CompetitorArchetype,
   DealMetadata,
@@ -40,6 +42,8 @@ import {
   computePaybackAndCashFlow,
   computeSensitivityScenarios,
   formatCurrencyCompact,
+  formatCurrencyFull,
+  getUseCasePsDays,
   isHighFeasibilityQuadrant,
   RoiInputs,
 } from './utils/calculations';
@@ -186,6 +190,9 @@ export default function App() {
   const [competitorArchetype, setCompetitorArchetype] = useState<CompetitorArchetype>(
     () => urlSeed?.competitorArchetype ?? 'byollm'
   );
+  const [byollmStackTier, setByollmStackTier] = useState<ByollmStackTier>(
+    () => urlSeed?.byollmStackTier ?? 'flagship'
+  );
   const [povConfig, setPovConfig] = useState<PovConfig>(() => ({
     ...DEFAULT_POV_CONFIG,
     ...(urlSeed?.povConfig ?? {}),
@@ -200,6 +207,7 @@ export default function App() {
   const [scenariosModalOpen, setScenariosModalOpen] = useState(false);
   const [customerSheetModalOpen, setCustomerSheetModalOpen] = useState(false);
   const [isExportingDeck, setIsExportingDeck] = useState(false);
+  const [printMode, setPrintMode] = useState<'tab' | 'brief'>('tab');
   const [toastMsg, setToastMsg] = useState<string | null>(() =>
     urlSeed ? `Loaded shared ${VERTICAL_PRESETS[urlSeed.vertical].shortName} scenario from URL` : null
   );
@@ -207,6 +215,21 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
   }, [isDark]);
+
+  useEffect(() => {
+    const onAfterPrint = () => setPrintMode('tab');
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => window.removeEventListener('afterprint', onAfterPrint);
+  }, []);
+
+  const handlePrintBrief = () => {
+    setPrintMode('brief');
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.print();
+      });
+    });
+  };
 
   const notify = (msg: string) => {
     setToastMsg(msg);
@@ -224,8 +247,8 @@ export default function App() {
   const selectedUcId = selectedUcByVertical[vertical];
 
   const roiResults = useMemo(
-    () => calculateUnitEconomics(inputs, preset, competitorArchetype),
-    [inputs, preset, competitorArchetype]
+    () => calculateUnitEconomics(inputs, preset, competitorArchetype, byollmStackTier),
+    [inputs, preset, competitorArchetype, byollmStackTier]
   );
 
   const includedUseCases = useMemo(
@@ -270,9 +293,10 @@ export default function App() {
         hlee.psDays,
         psDayRate,
         competitorArchetype,
-        hlee.weeks
+        hlee.weeks,
+        byollmStackTier
       ),
-    [inputs, preset, hlee.psDays, psDayRate, competitorArchetype, hlee.weeks]
+    [inputs, preset, hlee.psDays, psDayRate, competitorArchetype, hlee.weeks, byollmStackTier]
   );
 
   const briefText = useMemo(
@@ -314,6 +338,7 @@ export default function App() {
     sovereignty,
     apiReadiness,
     competitorArchetype,
+    byollmStackTier,
     povConfig,
     psDayRate,
     dealMeta,
@@ -327,6 +352,11 @@ export default function App() {
   const handleChangeCompetitor = (next: CompetitorArchetype) => {
     setCompetitorArchetype(next);
     notify(`Comparing Omilia vs. ${COMPETITOR_PROFILES[next].title}`);
+  };
+
+  const handleChangeByollmStackTier = (next: ByollmStackTier) => {
+    setByollmStackTier(next);
+    notify(`BYOLLM voice stack set to ${BYOLLM_STACK_TIERS[next].label}`);
   };
 
   const handleUpdateInput = <K extends keyof RoiInputs>(key: K, val: RoiInputs[K]) => {
@@ -600,6 +630,7 @@ export default function App() {
     setSovereignty(p.sovereignty);
     setApiReadiness(p.apiReadiness);
     setCompetitorArchetype(p.competitorArchetype ?? 'byollm');
+    setByollmStackTier(p.byollmStackTier ?? 'flagship');
     setPovConfig({ ...DEFAULT_POV_CONFIG, ...(p.povConfig ?? {}) });
     setPsDayRate(p.psDayRate || 1800);
     setDealMeta(p.dealMeta ?? DEFAULT_DEAL_META);
@@ -630,6 +661,7 @@ export default function App() {
     setSovereignty(parsed.sovereignty);
     setApiReadiness(parsed.apiReadiness);
     setCompetitorArchetype(parsed.competitorArchetype);
+    setByollmStackTier(parsed.byollmStackTier);
     setPovConfig(parsed.povConfig);
     setPsDayRate(parsed.psDayRate);
     setDealMeta(parsed.dealMeta);
@@ -726,7 +758,9 @@ export default function App() {
     const tcoSummary = [
       `OMILIA UNIT ECONOMICS & TCO SUMMARY — ${preset.name.toUpperCase()}`,
       dealMeta.prospectName ? `Prospect: ${dealMeta.prospectName}` : null,
-      `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`,
+      `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title}${
+        comp.key === 'byollm' ? ` · ${BYOLLM_STACK_TIERS[roiResults.byollmStackTier].label}` : ''
+      } (${comp.examples})`,
       `Monthly Inbound Calls: ${inputs.callVolume.toLocaleString()} (${inputs.surge.toFixed(1)}x surge = ${Math.round(roiResults.effectiveMonthlyCalls).toLocaleString()} calls/mo)`,
       `Containment: ${Math.round(roiResults.baseCont * 100)}% Baseline -> ${Math.round(roiResults.targetCont * 100)}% Omilia (+${roiResults.containmentLiftPct}% Lift)`,
       `Hard P&L Labor Realization: ${roiResults.laborRealizationPct}% (attrition, BPO flex-down & hiring avoidance — zero Day-1 layoffs)`,
@@ -775,6 +809,14 @@ export default function App() {
     dealMeta.dealOwner ? `Owner: ${dealMeta.dealOwner}` : null,
   ].filter(Boolean);
 
+  const tabPrintLabels: Record<TabKey, string> = {
+    economics: 'Unit Economics & 36-Month TCO Simulator',
+    radar: 'AI Radar 2.0 Prioritizer',
+    pov: 'Initial POV / POC Blueprint',
+    scoping: 'Partner Deal-Scoping & SOW Guardrails',
+    mcp: 'Live MCP Protocol & Latency Architecture',
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <TopBar
@@ -789,7 +831,10 @@ export default function App() {
         onChangeVertical={handleChangeVertical}
         isDark={isDark}
         onToggleTheme={() => setIsDark((d) => !d)}
-        onPrint={() => window.print()}
+        onPrint={() => {
+          setPrintMode('tab');
+          window.requestAnimationFrame(() => window.print());
+        }}
         onOpenScenarios={() => setScenariosModalOpen(true)}
         onOpenCustomerSheet={() => setCustomerSheetModalOpen(true)}
         onDownloadDeck={handleDownloadDeck}
@@ -797,20 +842,175 @@ export default function App() {
         savedCount={savedDeals.length}
       />
 
-      {/* Print Header */}
-      <div className="print-only mx-auto w-full max-w-[1440px] px-6 pt-4 pb-2 border-b border-slate-300">
+      {/* Print Header for Active Workbench Tab */}
+      <div
+        className={
+          printMode === 'brief'
+            ? 'no-print'
+            : 'print-only mx-auto w-full max-w-[1440px] px-6 pt-3 pb-3 mb-3 border-b border-slate-300'
+        }
+      >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="font-display text-lg font-bold text-slate-900">
-            Omilia Partner Workbench — {dealMeta.prospectName ? `${dealMeta.prospectName} · ` : ''}{preset.name}
-          </h1>
-          <span className="text-xs text-slate-600">{preset.compliance.join(' · ')}</span>
+          <div>
+            <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-teal-700">
+              {tabPrintLabels[activeTab]}
+            </div>
+            <h1 className="font-display text-lg font-bold text-slate-900">
+              Omilia Partner Workbench — {dealMeta.prospectName ? `${dealMeta.prospectName} · ` : ''}
+              {preset.name}
+            </h1>
+          </div>
+          <span className="text-xs text-slate-600">
+            {preset.compliance.join(' · ')} · Generated {new Date().toLocaleDateString()}
+          </span>
         </div>
         {printMetaParts.length > 0 && (
           <div className="mt-1 text-xs text-slate-600">{printMetaParts.join(' · ')}</div>
         )}
       </div>
 
-      <main className="mx-auto w-full max-w-[1440px] flex-1 px-6 py-7">
+      {/* Dedicated Printable Executive Deal Brief Document (triggered from DealBriefModal) */}
+      <div
+        className={
+          printMode === 'brief'
+            ? 'print-only mx-auto w-full max-w-[1440px] px-6 py-4 space-y-5'
+            : 'hidden'
+        }
+      >
+        <div className="border-b border-slate-300 pb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-teal-700">
+              Executive Deal Brief &amp; Business Case Summary
+            </div>
+            <h1 className="font-display text-xl font-bold text-slate-900">
+              {dealMeta.prospectName ? `${dealMeta.prospectName} — ` : ''}Omilia Sovereign CX Alignment ({preset.name})
+            </h1>
+          </div>
+          <span className="text-xs text-slate-600">
+            Generated {new Date().toLocaleDateString()} · {preset.compliance.slice(0, 3).join(' · ')}
+          </span>
+        </div>
+        {printMetaParts.length > 0 && (
+          <div className="text-xs text-slate-700 font-medium">{printMetaParts.join(' · ')}</div>
+        )}
+
+        <section className="grid grid-cols-4 divide-x divide-slate-300 rounded-xl border border-slate-300 bg-white">
+          <div className="p-4">
+            <div className="text-[11px] font-medium text-slate-500">
+              Annual Hard P&amp;L ({roiResults.laborRealizationPct}%)
+            </div>
+            <div className="mt-1 font-mono text-lg font-bold text-teal-700">
+              {formatCurrencyCompact(roiResults.annualNetSavings)}
+            </div>
+            <div className="text-[10.5px] text-slate-500">
+              +{formatCurrencyCompact(roiResults.annualCapacityReinvestedValue)}/yr capacity
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="text-[11px] font-medium text-slate-500">Break-Even Payback</div>
+            <div className="mt-1 font-mono text-lg font-bold text-slate-900">
+              {payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} mos` : 'N/A'}
+            </div>
+            <div className="text-[10.5px] text-slate-500">
+              PS: {formatCurrencyFull(payback.implementationCost)} ({payback.omiliaBuildMonths.toFixed(1)}m build + 2m ramp)
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="text-[11px] font-medium text-slate-500">
+              3-Yr Advantage vs. {roiResults.competitorProfile.shortLabel}
+            </div>
+            <div className="mt-1 font-mono text-lg font-bold text-slate-900">
+              {formatCurrencyCompact(payback.threeYearCompetitorSavings)}
+            </div>
+            <div className="text-[10.5px] text-slate-500">
+              @{inputs.surge.toFixed(1)}x surge · Yr3 ${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/res
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="text-[11px] font-medium text-slate-500">Phase 1 HLEE &amp; POV</div>
+            <div className="mt-1 font-mono text-lg font-bold text-emerald-700">
+              {hlee.timelineLabel}
+            </div>
+            <div className="text-[10.5px] text-slate-500">
+              {hlee.psEffortLabel} · POV {povPlan.povDurationLabel}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-2 gap-6 rounded-xl border border-slate-300 bg-white p-5">
+          <div>
+            <h2 className="font-display text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              Architecture &amp; Commercial Posture
+            </h2>
+            <dl className="divide-y divide-slate-200 text-xs">
+              <div className="flex justify-between py-1.5">
+                <dt className="text-slate-500">Partner GTM Motion</dt>
+                <dd className="font-medium text-slate-900">{MOTION_LABELS[partnerMotion]}</dd>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <dt className="text-slate-500">Deployment Sovereignty</dt>
+                <dd className="font-medium text-slate-900">{SOVEREIGNTY_LABELS[sovereignty]}</dd>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <dt className="text-slate-500">Competitive Baseline</dt>
+                <dd className="font-medium text-slate-900">
+                  {roiResults.competitorProfile.title}
+                  {roiResults.competitorProfile.key === 'byollm'
+                    ? ` · ${BYOLLM_STACK_TIERS[roiResults.byollmStackTier].shortLabel}`
+                    : ''}{' '}
+                  (incl. 35% esc. burn)
+                </dd>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <dt className="text-slate-500">Initial POV / POC Plan</dt>
+                <dd className="font-medium text-teal-700">
+                  {povPlan.povDurationLabel} · {povPlan.heroIntents.length} Hero Intents ·{' '}
+                  {povPlan.effectiveFeeUsd === 0 ? '$0 Co-Sell' : formatCurrencyFull(povPlan.effectiveFeeUsd)}
+                </dd>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <dt className="text-slate-500">36-Mo Cumulative Totals</dt>
+                <dd className="font-mono font-semibold text-slate-900">
+                  Legacy {formatCurrencyCompact(payback.threeYearLegacyTotal)} ·{' '}
+                  {roiResults.competitorProfile.shortLabel} {formatCurrencyCompact(payback.threeYearDiyTotal)} · Omilia{' '}
+                  {formatCurrencyCompact(payback.threeYearOmiliaTotal)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div>
+            <h2 className="font-display text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              Included Phase 1 / Hybrid Use Cases ({includedUseCases.length})
+            </h2>
+            <ul className="divide-y divide-slate-200 text-xs">
+              {includedUseCases.map((uc) => (
+                <li key={uc.id} className="flex justify-between py-1.5">
+                  <span className="font-medium text-slate-800">{uc.name}</span>
+                  <span className="font-mono text-teal-700">+{getUseCasePsDays(uc)} PS Days</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-300 bg-white p-5">
+          <h2 className="font-display text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+            Executive Deal Summary Narrative
+          </h2>
+          <pre className="font-mono text-[10.5px] leading-relaxed text-slate-800 whitespace-pre-wrap">
+            {briefText}
+          </pre>
+        </section>
+      </div>
+
+      <main
+        className={
+          printMode === 'brief'
+            ? 'no-print mx-auto w-full max-w-[1440px] flex-1 px-6 py-7'
+            : 'mx-auto w-full max-w-[1440px] flex-1 px-6 py-7'
+        }
+      >
         {activeTab === 'economics' && (
           <UnitEconomicsTab
             preset={preset}
@@ -820,6 +1020,8 @@ export default function App() {
             sensitivity={sensitivity}
             competitorArchetype={competitorArchetype}
             onChangeCompetitor={handleChangeCompetitor}
+            byollmStackTier={byollmStackTier}
+            onChangeByollmStackTier={handleChangeByollmStackTier}
             psDayRate={psDayRate}
             hleePsDays={hlee.psDays}
             hleeTimelineLabel={hlee.timelineLabel}
@@ -955,6 +1157,7 @@ export default function App() {
         onCopyBrief={handleCopyBrief}
         onDownloadCsv={handleDownloadCsv}
         onDownloadDeck={handleDownloadDeck}
+        onPrintBrief={handlePrintBrief}
         isExportingDeck={isExportingDeck}
         copied={briefCopied}
       />
@@ -981,6 +1184,7 @@ export default function App() {
           sovereignty,
           apiReadiness,
           competitorArchetype,
+          byollmStackTier,
           povConfig,
           psDayRate,
           dealMeta,
@@ -1005,6 +1209,7 @@ export default function App() {
         sovereignty={sovereignty}
         apiReadiness={apiReadiness}
         competitorArchetype={competitorArchetype}
+        byollmStackTier={byollmStackTier}
         povConfig={povConfig}
         povPlan={povPlan}
         psDayRate={psDayRate}
@@ -1013,6 +1218,7 @@ export default function App() {
         onSelectTab={setActiveTab}
         onChangeVertical={handleChangeVertical}
         onChangeCompetitor={handleChangeCompetitor}
+        onChangeByollmStackTier={handleChangeByollmStackTier}
         onUpdateInput={handleUpdateInput}
         onChangeSovereignty={setSovereignty}
         onAddCustomUseCase={handleAddCustomUseCase}

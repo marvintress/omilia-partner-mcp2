@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import {
   ApiReadiness,
+  BYOLLM_STACK_TIERS,
+  ByollmStackTier,
   CompetitorArchetype,
   PartnerMotion,
   PovConfig,
@@ -69,6 +71,7 @@ interface WorkbenchGuideWidgetProps {
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
   competitorArchetype: CompetitorArchetype;
+  byollmStackTier: ByollmStackTier;
   povConfig: PovConfig;
   povPlan: PovPlanResult;
   psDayRate: number;
@@ -77,6 +80,7 @@ interface WorkbenchGuideWidgetProps {
   onSelectTab: (tab: TabKey) => void;
   onChangeVertical: (v: VerticalKey) => void;
   onChangeCompetitor: (c: CompetitorArchetype) => void;
+  onChangeByollmStackTier: (tier: ByollmStackTier) => void;
   onUpdateInput: <K extends keyof RoiInputs>(key: K, val: RoiInputs[K]) => void;
   onChangeSovereignty: (s: SovereigntyTier) => void;
   onAddCustomUseCase: (name: string, feas: number, imp: number) => void;
@@ -108,7 +112,11 @@ const TOUR_STEPS: {
     tab: 'economics',
     title: 'Step 1 of 5 · Unit Economics, Hard P&L Realization & Break-Even',
     summary: ({ preset, inputs, results, payback }) =>
-      `Viewing ${preset.name} vs. ${results.competitorProfile.title} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Baseline: toggle Packaged BYOLLM (Cognigy/Kore/Parloa) vs. DIY Hyperscaler (Azure OpenAI/Bedrock).\n• Volume, Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/res), and Dynamic Auto-Fit FTEs (${inputs.autoFitAgents !== false ? 'Live' : 'Manual'}).\n• Hard P&L Labor Realization (${results.laborRealizationPct}%): separates bankable cash savings (attrition, BPO flex-down, hiring avoidance—zero Day-1 layoffs) from Reclaimed Queue Capacity.\n• 36-Month Cash Flow: models realistic build-time wait (${payback.omiliaBuildMonths.toFixed(1)}m Omilia HLEE vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY) + 2-month traffic ramp (25%→60%→100%), plotting color-coded Break-Even markers (Omilia teal ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'}, BYOLLM amber, DIY rose) + ±10% Sensitivity.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr Hard P&L Savings + ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity.`,
+      `Viewing ${preset.name} vs. ${results.competitorProfile.title}${
+        results.competitorProfile.key === 'byollm'
+          ? ` (${BYOLLM_STACK_TIERS[results.byollmStackTier].shortLabel})`
+          : ''
+      } (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Baseline & Stack Tier: toggle Packaged BYOLLM (Flagship Voice frontier LLM + ElevenLabs-tier TTS vs. Discounted Mini LLM + Std TTS) or DIY Hyperscaler — both meter 35% failed/escalated bot attempts vs. Omilia $0 on escalations.\n• Volume, Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/res → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)} Yr3), and Dynamic Auto-Fit FTEs (${inputs.autoFitAgents !== false ? 'Live' : 'Manual'}).\n• Hard P&L Labor Realization (${results.laborRealizationPct}%): separates bankable cash savings (attrition, BPO flex-down, hiring avoidance—zero Day-1 layoffs) from Reclaimed Queue Capacity.\n• 36-Month Cash Flow: models build wait (${payback.omiliaBuildMonths.toFixed(1)}m Omilia HLEE vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY) + 2-mo ramp (25%→60%→100%), plotting color-coded Break-Even dots (Omilia teal ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'}, BYOLLM amber, DIY rose).\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr Hard P&L Savings + ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity.`,
   },
   {
     step: 2,
@@ -157,6 +165,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   sovereignty,
   apiReadiness,
   competitorArchetype,
+  byollmStackTier,
   povConfig,
   povPlan,
   psDayRate,
@@ -165,6 +174,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   onSelectTab,
   onChangeVertical,
   onChangeCompetitor,
+  onChangeByollmStackTier,
   onUpdateInput,
   onChangeSovereignty,
   onAddCustomUseCase,
@@ -184,7 +194,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     {
       id: 'welcome',
       role: 'assistant',
-      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 5 tabs (Unit Economics, AI Radar, POV / POC, Deal Scoping, MCP Inspector), explain what every slider, toggle, and selector tweaks (and why), or generate your Value Prop Deck (.pptx) for ${preset.shortName}.\n\nAsk about any specific control—like "How does Hard P&L Realization avoid layoffs?", "Explain color-coded break-even", or "Explain every control on this tab"—or switch to "Controls & Why" above to browse all settings.`,
+      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 5 tabs (Unit Economics, AI Radar, POV / POC, Deal Scoping, MCP Inspector), explain every slider and metering rule (incl. 35% competitor attempt burn, build + 2-mo ramp, and Hard P&L realization), open the Customer Discovery Sheet (.xlsx/.csv), or export your Value Prop Deck (.pptx) for ${preset.shortName}.\n\nAsk any question—like "Why is Omilia break-even faster?", "Open Customer Sheet", or "Explain every control on this tab"—or switch to "Controls & Why" above.`,
     },
   ]);
 
@@ -225,7 +235,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       whatItDoes:
         'Switches the market comparison baseline between Packaged BYOLLM Platforms (NiCE Cognigy, Kore.ai, Parloa) and DIY Hyperscaler / Frontier Stacks (Azure OpenAI / AWS Bedrock + Twilio/Connect).',
       whyItMatters:
-        'Lets partners benchmark Omilia’s vertically integrated sovereign stack accurately against either metered pass-through orchestrators ($180K–$300K PS + token/ASR/TTS fees) or custom DIY engineering builds ($450K–$750K + 40% drift tax).',
+        'Lets partners benchmark Omilia’s outcome-only pricing ($0 on unresolved escalations) accurately against metered orchestrators ($180K–$300K PS + ASR/LLM/TTS billed on both contained and escalated attempts) or DIY builds ($450K–$750K + 40% drift tax).',
       keywords: [
         'competitor',
         'byollm',
@@ -240,6 +250,13 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
         'neutral',
         'lock-in',
         'egress',
+        'attempt',
+        'attempted',
+        'burn',
+        'failed',
+        'escalated',
+        '35%',
+        'close',
       ],
       actionLabel:
         competitorArchetype === 'byollm'
@@ -248,6 +265,41 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       onAction: () => {
         onSelectTab('economics');
         onChangeCompetitor(competitorArchetype === 'byollm' ? 'diy_hyperscaler' : 'byollm');
+      },
+    },
+    {
+      id: 'byollmStackTier',
+      tab: 'economics',
+      tabLabel: 'Unit Economics',
+      name: 'BYOLLM Model & Speech Stack Tier (Flagship vs. Mini)',
+      currentValue: BYOLLM_STACK_TIERS[byollmStackTier].shortLabel,
+      whatItDoes:
+        'When Packaged BYOLLM is selected, switches between Flagship Voice (frontier/realtime LLM + commercial ASR + ElevenLabs-tier premium TTS @ $0.46/res base, surge^0.15) and Discounted Mini (mini/flash LLM + standard TTS @ $0.36/res base, surge^0.28).',
+      whyItMatters:
+        'Reflects real-world enterprise pricing ranges on Cognigy/Kore/Parloa deals (~$0.12–$0.20/min mini vs. ~$0.25–$0.40/min flagship neural voice) so partners can model either a stripped-down mini stack or production flagship voice parity.',
+      keywords: [
+        'flagship',
+        'mini',
+        'tier',
+        'stack',
+        'model',
+        'tts',
+        'stt',
+        'asr',
+        'elevenlabs',
+        'token',
+        'rate',
+        '0.46',
+        '0.36',
+      ],
+      actionLabel:
+        byollmStackTier === 'flagship'
+          ? 'Test Discounted Mini ($0.36 base)'
+          : 'Switch to Flagship Voice ($0.46 base)',
+      onAction: () => {
+        onSelectTab('economics');
+        onChangeCompetitor('byollm');
+        onChangeByollmStackTier(byollmStackTier === 'flagship' ? 'mini' : 'flagship');
       },
     },
     {
@@ -295,15 +347,18 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       name: 'Omilia Outcome Rate & Self-Learning Compression',
       currentValue: `$${inputs.omiliaOutcomeRate.toFixed(2)} → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)} Yr3`,
       whatItDoes:
-        'Sets Year 1 flat outcome pricing ($0.15–$1.00/resolved) with zero pass-through token/ASR/TTS fees, then applies Offline Self-Learning compression (-10% Yr2, -18% Yr3) strictly to Omilia’s variable outcome spend over 36 months.',
+        'Sets Year 1 flat outcome pricing ($0.15–$1.00/resolved, $0 on unresolved escalations) with zero pass-through token/ASR/TTS fees, then applies Offline Self-Learning compression (-10% Yr2, -18% Yr3) strictly to Omilia’s variable outcome spend over 36 months.',
       whyItMatters:
-        'Proves how Omilia eliminates multi-turn token volatility today and lowers effective unit cost over 3 years by codifying recurring agentic patterns into deterministic micro-flows.',
+        'Proves how Omilia eliminates failed-attempt & multi-turn token burn today while lowering effective unit cost over 3 years as recurring agentic patterns compile into deterministic micro-flows.',
       keywords: [
         'outcome rate',
         'outcome pricing',
+        'consumption',
         'price',
         'pricing',
         'resolved',
+        'escalation',
+        'escalations',
         'self-learning',
         'compression',
         'micro-flow',
@@ -931,9 +986,9 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
 
   const contextPrompts: Record<TabKey, string[]> = {
     economics: [
+      'Explain 35% attempt burn & break-even',
       'How does Hard P&L Realization avoid layoffs?',
-      'Explain color-coded break-even & Dynamic FTEs',
-      'Explain every control on economics',
+      'Download or upload Customer Sheet (.xlsx)',
     ],
     radar: [
       'How does Hybrid (Top-Right + Bottom-Right) work?',

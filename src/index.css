@@ -87,14 +87,129 @@ input[type="range"]::-moz-range-thumb {
 @media print {
   @page {
     size: landscape;
-    margin: 12mm;
+    margin: 10mm 11mm;
   }
 
+  html,
   body {
     background: #ffffff !important;
     color: #0f172a !important;
+    color-scheme: light !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    font-size: 11px !important;
+  }
+
+  /* Neutralize dark-mode classes on printed paper so dark backgrounds/pale text never leak into PDFs */
+  html.dark,
+  html.dark body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  html.dark [class*="dark:bg-slate-950"],
+  html.dark [class*="dark:bg-slate-900"],
+  html.dark [class*="dark:bg-slate-800"] {
+    background-color: #ffffff !important;
+  }
+
+  html.dark [class*="dark:bg-teal-950"],
+  html.dark [class*="dark:bg-emerald-950"] {
+    background-color: #f0fdfa !important;
+  }
+
+  html.dark [class*="dark:bg-amber-950"] {
+    background-color: #fffbeb !important;
+  }
+
+  html.dark [class*="dark:bg-rose-950"] {
+    background-color: #fff1f2 !important;
+  }
+
+  html.dark [class*="dark:border-slate-800"],
+  html.dark [class*="dark:border-slate-700"],
+  html.dark [class*="dark:divide-slate-800"] {
+    border-color: #cbd5e1 !important;
+  }
+
+  html.dark [class*="dark:text-slate-50"],
+  html.dark [class*="dark:text-slate-100"],
+  html.dark [class*="dark:text-slate-200"] {
+    color: #0f172a !important;
+  }
+
+  html.dark [class*="dark:text-slate-300"],
+  html.dark [class*="dark:text-slate-400"],
+  html.dark [class*="dark:text-slate-500"] {
+    color: #475569 !important;
+  }
+
+  html.dark [class*="dark:text-teal-400"],
+  html.dark [class*="dark:text-teal-300"] {
+    color: #0f766e !important;
+  }
+
+  html.dark [class*="dark:text-emerald-400"] {
+    color: #047857 !important;
+  }
+
+  html.dark [class*="dark:text-rose-400"] {
+    color: #be123c !important;
+  }
+
+  html.dark [class*="dark:text-amber-400"] {
+    color: #b45309 !important;
+  }
+
+  html.dark svg text[class*="fill-slate-"] {
+    fill: #334155 !important;
+  }
+
+  html.dark svg line[class*="stroke-slate-800"],
+  html.dark svg line[class*="stroke-slate-700"] {
+    stroke: #e2e8f0 !important;
+  }
+
+  /* Strip shadows & expand scrollable regions so content is never clipped */
+  * {
+    box-shadow: none !important;
+  }
+
+  main {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .overflow-y-auto,
+  .overflow-x-auto {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Pagination & Page-Break Protection */
+  section,
+  .print-avoid-break,
+  tr,
+  svg,
+  dl > div {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
   }
 
   .no-print {

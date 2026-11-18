@@ -15,6 +15,7 @@ import {
   ParsedCustomerIntake,
   parseCustomerSpreadsheet,
 } from '../utils/customerSheet';
+import { InfoTooltip } from './InfoTooltip';
 
 interface CustomerSheetModalProps {
   open: boolean;
@@ -146,9 +147,16 @@ export const CustomerSheetModal: React.FC<CustomerSheetModalProps> = ({
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                  1. Download Customer Intake Spreadsheet
-                </h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    1. Download Customer Intake Spreadsheet
+                  </h3>
+                  <InfoTooltip
+                    label="Pre-filled vs. Blank Customer Sheet"
+                    description="Pre-fill exports your current workbench assumptions so the customer validates or adjusts them. Blank Customer Form leaves editable cells empty (keeping dropdowns and guidance) for clean greenfield discovery."
+                    tcoImpact="Captures verified customer volumes, AHT, wages, and call drivers asynchronously before modeling CFO payback."
+                  />
+                </div>
                 <p className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">
                   Includes 3 Excel tabs: <span className="font-medium text-slate-700 dark:text-slate-300">Customer Discovery</span> (with dropdowns),{' '}
                   <span className="font-medium text-slate-700 dark:text-slate-300">Use Cases (Call Drivers)</span>, and{' '}
@@ -213,9 +221,16 @@ export const CustomerSheetModal: React.FC<CustomerSheetModalProps> = ({
           {/* Step 2: Upload Completed Customer Sheet */}
           <section className="space-y-3">
             <div>
-              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                2. Upload Completed Customer Spreadsheet
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                  2. Upload Completed Customer Spreadsheet
+                </h3>
+                <InfoTooltip
+                  label="Round-Trip Upload & Benchmark Fallback"
+                  description="Parses Microsoft Excel (.xlsx), Google Sheets exports, or CSV templates. Blank numeric cells automatically fall back to that sector's preset defaults, and any call drivers entered on Tab 2 update AI Radar & Phase 1 HLEE."
+                  tcoImpact="Pre-populates every slider, HLEE timeline, POV charter, and PowerPoint slide in one click with a preview gate before overwriting."
+                />
+              </div>
               <p className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">
                 Any blank cells automatically inherit the selected vertical’s industry benchmarks. You’ll preview all parsed numbers before applying.
               </p>

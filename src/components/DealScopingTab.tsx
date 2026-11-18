@@ -56,15 +56,22 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
   const includedCount = highFeasUseCases.filter((u) => u.included !== false).length;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-12 print:block print:space-y-5 gap-6 items-start">
       {/* Left 5 Columns: Partner & Architecture Scoping Inputs */}
       <div className="lg:col-span-5 space-y-6">
         <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div>
-              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                Partner &amp; Architecture Scoping Inputs
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  Partner &amp; Architecture Scoping Inputs
+                </h2>
+                <InfoTooltip
+                  label="Partner & Architecture Scoping"
+                  description="Synchronizes Partner GTM Motion, Deployment Sovereignty (SaaS vs. Bare Metal), High-Feasibility Radar Intents, API Readiness, and Blended PS Day Rate into HLEE timelines and Unit Economics Break-Even."
+                  tcoImpact="Prevents partner margin erosion and PS under-scoping on air-gapped or mainframe deals."
+                />
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{preset.name}</p>
             </div>
             <button
@@ -331,7 +338,7 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
                 No High-Feasibility (Feasibility ≥50: Top-Right or Bottom-Right) use cases currently plotted on AI Radar 2.0.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 border-t border-b border-slate-100 dark:divide-slate-800 dark:border-slate-800 max-h-60 overflow-y-auto">
+              <div className="divide-y divide-slate-100 border-t border-b border-slate-100 dark:divide-slate-800 dark:border-slate-800 max-h-60 overflow-y-auto print:max-h-none print:overflow-visible">
                 {highFeasUseCases.map((uc) => {
                   const isIncluded = uc.included !== false;
                   const psDays = getUseCasePsDays(uc);
@@ -395,9 +402,16 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
 
           {/* Mandatory SOW & Margin Protection Guardrails */}
           <div className="mt-6">
-            <h3 className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-2.5">
-              Mandatory SOW &amp; Margin Protection Guardrails
-            </h3>
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <h3 className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                Mandatory SOW &amp; Margin Protection Guardrails
+              </h3>
+              <InfoTooltip
+                label="SOW & Margin Protection Guardrails"
+                description="Automatically inserts fixed-scope contractual clauses tailored to your Sovereignty Tier, API Readiness, and 80/20 bounded intent count."
+                tcoImpact="Eliminates unpaid change orders from legacy 3270 screen-scraping or unapproved AI behavior shifts."
+              />
+            </div>
             <ul className="space-y-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300 list-disc pl-4">
               {hlee.guardrails.map((g, idx) => (
                 <li key={idx}>{g}</li>
@@ -407,7 +421,7 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
         </section>
 
         {/* Partner vs. Omilia RACI Responsibility Matrix */}
-        <section className="rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+        <section className="print:break-before-page rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
           <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
             <div className="flex items-center gap-1.5">
               <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">

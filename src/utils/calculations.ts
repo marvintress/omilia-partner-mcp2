@@ -1,5 +1,7 @@
 import {
   ApiReadiness,
+  BYOLLM_STACK_TIERS,
+  ByollmStackTier,
   COMPETITOR_PROFILES,
   CompetitorArchetype,
   CompetitorProfile,
@@ -35,6 +37,7 @@ export interface RoiInputs {
 
 export interface RoiResults {
   competitorProfile: CompetitorProfile;
+  byollmStackTier: ByollmStackTier;
   unitHumanCost: number;
   effectiveMonthlyCalls: number;
   baseCont: number;
@@ -110,9 +113,18 @@ export function computeFittedAgents(inputs: RoiInputs): number {
 export function calculateUnitEconomics(
   inputs: RoiInputs,
   preset: VerticalPreset,
-  competitorArchetype: CompetitorArchetype = 'byollm'
+  competitorArchetype: CompetitorArchetype = 'byollm',
+  byollmStackTier: ByollmStackTier = 'flagship'
 ): RoiResults {
-  const competitorProfile = COMPETITOR_PROFILES[competitorArchetype] ?? COMPETITOR_PROFILES.byollm;
+  const tierProfile = BYOLLM_STACK_TIERS[byollmStackTier] ?? BYOLLM_STACK_TIERS.flagship;
+  const resolvedByollmProfile: CompetitorProfile = {
+    ...COMPETITOR_PROFILES.byollm,
+    baseVariableRate: tierProfile.baseVariableRate,
+    surgeExponent: tierProfile.surgeExponent,
+    monthlyLicenseOrTaxBase: tierProfile.monthlyLicenseOrTaxBase,
+  };
+  const competitorProfile =
+    competitorArchetype === 'byollm' ? resolvedByollmProfile : COMPETITOR_PROFILES.diy_hyperscaler;
   const unitHumanCost = computeEffectiveUnitAgentCost(inputs);
   const baseCont = inputs.baseContainment / 100;
   const targetCont = Math.max(baseCont + 0.05, inputs.targetContainment / 100);
@@ -147,13 +159,17 @@ export function calculateUnitEconomics(
     Math.max(0, (1 - realizationFactor) * (legacyHumanCostMo - omiliaRawHumanCostMo)) * 12;
 
   // 3. Competitor Baseline (Packaged BYOLLM or DIY Hyperscaler)
+  // Unlike Omilia outcome pricing ($0 on unresolved escalations), metered ASR/LLM/TTS stacks bill
+  // for failed/escalated attempts (~35% of a full turn's minutes/tokens before handing off to an agent).
+  const COMPETITOR_ESCALATED_ATTEMPT_WEIGHT = 0.35;
   const computeCompetitorRunRate = (profile: CompetitorProfile) => {
     const cCont = Math.max(baseCont + 0.08, targetCont - profile.containmentLag);
     const cAuto = effectiveMonthlyCalls * cCont;
     const cEsc = effectiveMonthlyCalls * (1 - cCont);
     const cSurgePenalty = Math.pow(inputs.surge, profile.surgeExponent);
     const cVarRate = profile.baseVariableRate * cSurgePenalty;
-    const cPlatformMo = cAuto * cVarRate + profile.monthlyLicenseOrTaxBase;
+    const cMeteredCalls = cAuto + cEsc * COMPETITOR_ESCALATED_ATTEMPT_WEIGHT;
+    const cPlatformMo = cMeteredCalls * cVarRate + profile.monthlyLicenseOrTaxBase;
     const rawHumanMo = cEsc * unitHumanCost;
     const cHumanMo =
       legacyHumanCostMo >= rawHumanMo
@@ -170,7 +186,7 @@ export function calculateUnitEconomics(
   };
 
   const activeCompRun = computeCompetitorRunRate(competitorProfile);
-  const byollmMonthlyCost = computeCompetitorRunRate(COMPETITOR_PROFILES.byollm).cMonthly;
+  const byollmMonthlyCost = computeCompetitorRunRate(resolvedByollmProfile).cMonthly;
   const diyHyperscalerMonthlyCost = computeCompetitorRunRate(
     COMPETITOR_PROFILES.diy_hyperscaler
   ).cMonthly;
@@ -216,9 +232,10 @@ export function calculateUnitEconomics(
     maxLegacyHumanCost >= maxDiyRawHuman
       ? maxLegacyHumanCost - realizationFactor * (maxLegacyHumanCost - maxDiyRawHuman)
       : maxDiyRawHuman;
+  const maxDiyMeteredCalls =
+    maxSurgeCalls * (diyContainment + (1 - diyContainment) * COMPETITOR_ESCALATED_ATTEMPT_WEIGHT);
   const maxAnnualDiy =
-    (maxSurgeCalls *
-      diyContainment *
+    (maxDiyMeteredCalls *
       (competitorProfile.baseVariableRate * Math.pow(maxSurge, competitorProfile.surgeExponent)) +
       maxDiyHuman +
       competitorProfile.monthlyLicenseOrTaxBase) *
@@ -228,6 +245,7 @@ export function calculateUnitEconomics(
 
   return {
     competitorProfile,
+    byollmStackTier: tierProfile.key,
     unitHumanCost,
     effectiveMonthlyCalls,
     baseCont,
@@ -620,7 +638,8 @@ export function computeSensitivityScenarios(
   psDays: number,
   psDayRate: number,
   competitorArchetype: CompetitorArchetype = 'byollm',
-  hleeWeeks = 6
+  hleeWeeks = 6,
+  byollmStackTier: ByollmStackTier = 'flagship'
 ): SensitivityScenario[] {
   const conservativeTarget = Math.max(inputs.baseContainment + 5, inputs.targetContainment - 10);
   const expectedTarget = Math.max(inputs.baseContainment + 5, inputs.targetContainment);
@@ -636,7 +655,8 @@ export function computeSensitivityScenarios(
     const res = calculateUnitEconomics(
       { ...inputs, targetContainment: d.target },
       preset,
-      competitorArchetype
+      competitorArchetype,
+      byollmStackTier
     );
     const pb = computePaybackAndCashFlow(res, psDays, psDayRate, inputs.omiliaOutcomeRate, hleeWeeks);
     return {
@@ -979,7 +999,9 @@ export function buildExecutiveDealBrief(params: {
     `OMILIA ENTERPRISE CX DEAL BRIEF — ${preset.name.toUpperCase()}`,
     `================================================================`,
     ...(metaLines.length > 0 ? [metaLines.join(' | '), ``] : []),
-    `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`,
+    `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title}${
+      comp.key === 'byollm' ? ` — ${BYOLLM_STACK_TIERS[results.byollmStackTier].label}` : ''
+    } (${comp.examples})`,
     `Annual Hard P&L Savings vs. Legacy (${results.laborRealizationPct}% Labor Capture): ${formatCurrencyCompact(results.annualNetSavings)} (${formatCurrencyCompact(results.monthlyNetSavings)}/mo)`,
     `Reclaimed Non-Layoff Capacity Value: ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr (${Math.round(results.ftesFreed).toLocaleString()} FTEs freed via attrition/BPO/surge avoidance)`,
     `3-Year TCO Advantage vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)} (incl. Self-Learning Compression)`,
@@ -1042,7 +1064,12 @@ export function buildDealCsv(params: {
 
   const rows: string[][] = [
     ['Omilia Partner Workbench Export', preset.name],
-    ['Competitive Comparison Baseline', `${comp.title} (${comp.examples})`],
+    [
+      'Competitive Comparison Baseline',
+      `${comp.title}${
+        comp.key === 'byollm' ? ` — ${BYOLLM_STACK_TIERS[results.byollmStackTier].label}` : ''
+      } (${comp.examples})`,
+    ],
     ['Prospect', dealMeta.prospectName || 'Unspecified'],
     ['Partner', dealMeta.partnerName || 'Unspecified'],
     ['CCaaS Platform', dealMeta.ccaasPlatform || 'Unspecified'],

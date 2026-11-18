@@ -1,6 +1,7 @@
 import PptxGenJS from 'pptxgenjs';
 import {
   ApiReadiness,
+  BYOLLM_STACK_TIERS,
   DealMetadata,
   PartnerMotion,
   PovConfig,
@@ -189,7 +190,10 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
   } = params;
 
   const comp = results.competitorProfile;
-  const includedUseCases = useCases.filter((uc) => isTopRightQuadrant(uc) && uc.included !== false);
+  const activeTierLabel =
+    comp.key === 'byollm' ? BYOLLM_STACK_TIERS[results.byollmStackTier].label : null;
+  const compDisplayTitle = activeTierLabel ? `${comp.title} · ${activeTierLabel}` : comp.title;
+  const includedUseCases = useCases.filter((uc) => isHighFeasibilityQuadrant(uc) && uc.included !== false);
   const deferredCount = useCases.length - includedUseCases.length;
 
   const maxParallelMs = Math.max(...preset.mcpSystems.map((s) => s.ms));
@@ -256,7 +260,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
     });
 
     slide.addText(
-      `Industry Vertical: ${preset.name}   |   Competitive Baseline: ${comp.title} (${comp.examples})\nGTM Motion: ${motionLabel}   |   Deployment: ${sovereigntyLabel}`,
+      `Industry Vertical: ${preset.name}   |   Competitive Baseline: ${compDisplayTitle} (${comp.examples})\nGTM Motion: ${motionLabel}   |   Deployment: ${sovereigntyLabel}`,
       {
         x: 0.75,
         y: 2.75,
@@ -291,7 +295,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
       {
         label: 'PHASE 1 TIME-TO-VALUE',
         val: hlee.timelineLabel,
-        sub: `${includedUseCases.length} Top-Right Intents · 96%+ Day-1 NLU`,
+        sub: `${includedUseCases.length} High-Feas Intents · 96%+ Day-1 NLU`,
         accent: '5EEAD4',
       },
     ];
@@ -460,16 +464,23 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
     );
 
     // Right Card: Selected Competitor Baseline
+    const compAccent = comp.key === 'byollm' ? C.amber : C.rose;
+    const compBg = comp.key === 'byollm' ? C.amberBg : C.roseBg;
+    const compBorder = comp.key === 'byollm' ? 'FDE68A' : C.roseBorder;
     slide.addShape(pptx.ShapeType.roundRect, {
       x: 6.83,
       y: 1.5,
       w: 5.9,
       h: 4.15,
       rectRadius: 0.08,
-      fill: { color: C.roseBg },
-      line: { color: C.roseBorder, width: 1 },
+      fill: { color: compBg },
+      line: { color: compBorder, width: 1 },
     });
-    slide.addText(`COMPETITOR BASELINE · ${comp.examples.toUpperCase()}`, {
+    slide.addText(
+      `COMPETITOR BASELINE · ${comp.examples.toUpperCase()}${
+        activeTierLabel ? ` · ${BYOLLM_STACK_TIERS[results.byollmStackTier].shortLabel.toUpperCase()}` : ''
+      }`,
+      {
       x: 7.08,
       y: 1.7,
       w: 5.4,
@@ -477,7 +488,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
       fontFace: MONO,
       fontSize: 9.5,
       bold: true,
-      color: C.rose,
+      color: compAccent,
       margin: 0,
     });
     slide.addText(
@@ -490,7 +501,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         fontFace: FONT,
         fontSize: 19,
         bold: true,
-        color: C.rose,
+        color: compAccent,
         margin: 0,
       }
     );
@@ -527,7 +538,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
           options: { bold: true, color: C.rose },
         },
         {
-          text: `$${results.diyPerCallVariableRate.toFixed(2)}/call + ${comp.maintenanceTaxLabel} (${Math.round(results.diyContainment * 100)}% eff. containment).`,
+          text: `$${results.diyPerCallVariableRate.toFixed(2)}/res + 35% esc. attempt burn + ${comp.maintenanceTaxLabel} (${Math.round(results.diyContainment * 100)}% eff. cont.).`,
           options: { color: C.navy },
         },
       ],
@@ -545,7 +556,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
       line: { color: C.tealBorder, width: 1 },
     });
     slide.addText(
-      `WHY THIS BASELINE MATTERS: ${comp.shortLabel} forces CFOs to absorb both ${comp.setupRangeLabel} upfront (${comp.timeToValueLabel} time-to-value) AND unbounded variable metering (${comp.turnLatencyLabel}, ${comp.egressLabel}). Omilia eliminates multi-vendor tax while hitting ${Math.round(results.targetCont * 100)}% blended containment.`,
+      `WHY THIS BASELINE MATTERS: ${comp.shortLabel} forces CFOs to absorb ${comp.setupRangeLabel} upfront (${comp.timeToValueLabel}) PLUS variable LLM/ASR/TTS metering billed across both resolved and failed/escalated attempts (${comp.turnLatencyLabel}, ${comp.egressLabel}). Omilia bills $0 on unresolved calls while hitting ${Math.round(results.targetCont * 100)}% containment.`,
       {
         x: 0.85,
         y: 6.02,
@@ -563,7 +574,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
       `SPEAKER NOTES — SLIDE 2:\n` +
         `Use this slide to reframe the competitive conversation away from generic "AI chatbot" comparisons.\n` +
         `• In the workbench, we switched the Competitor Architecture Baseline to "${comp.title}" (${comp.examples}).\n` +
-        `• Walk the prospect through the hidden commercial & technical taxes: metered pass-through LLM/ASR/TTS fees (or 40% schema-drift maintenance for DIY Hyperscaler stacks), multi-hop latency above the 1,200ms caller hang-up threshold, and CCaaS ecosystem lock-in.`
+        `• Walk the prospect through the hidden commercial & technical taxes: metered pass-through LLM/ASR/TTS fees charged even on failed/escalated attempts (vs. Omilia $0 on unresolved calls), 40% schema-drift maintenance for DIY stacks, multi-hop latency above the 1,200ms hang-up threshold, and CCaaS ecosystem lock-in.`
     );
   }
 
@@ -802,6 +813,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
     );
 
     // Right: CFO Comparison Table + Clarifying Footnote
+    const slide4CompColor = comp.key === 'byollm' ? C.amber : C.rose;
     const tableRows: PptxGenJS.TableRow[] = [
       [
         {
@@ -814,7 +826,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         },
         {
           text: comp.tableHeader,
-          options: { bold: true, align: 'right', fill: { color: C.bgLight }, color: C.rose },
+          options: { bold: true, align: 'right', fill: { color: C.bgLight }, color: slide4CompColor },
         },
         {
           text: 'Omilia Sovereign',
@@ -826,7 +838,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         { text: '$0 (Sunk)', options: { align: 'right', fontFace: MONO } },
         {
           text: `${formatCurrencyCompact(payback.competitorSetupCost)}\n(${comp.timeToValueLabel})`,
-          options: { align: 'right', fontFace: MONO, color: C.rose },
+          options: { align: 'right', fontFace: MONO, color: slide4CompColor },
         },
         {
           text: `${formatCurrencyFull(payback.implementationCost)}\n(${hlee.timelineLabel})`,
@@ -846,14 +858,14 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         },
       ],
       [
-        { text: 'Monthly Platform, Metering & Maint.', options: { bold: true } },
+        { text: 'Monthly Platform, Metering & 35% Burn', options: { bold: true } },
         { text: formatCurrencyFull(results.legacyPlatformSpendMo), options: { align: 'right', fontFace: MONO } },
         {
           text: formatCurrencyFull(results.diyPlatformSpendMo),
-          options: { align: 'right', fontFace: MONO, color: C.rose },
+          options: { align: 'right', fontFace: MONO, color: slide4CompColor },
         },
         {
-          text: formatCurrencyFull(results.omiliaPlatformSpendMo),
+          text: `${formatCurrencyFull(results.omiliaPlatformSpendMo)}\n($0 on escalations)`,
           options: { align: 'right', fontFace: MONO, bold: true, color: C.tealDark },
         },
       ],
@@ -871,7 +883,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         },
         {
           text: formatCurrencyCompact(payback.threeYearDiyTotal),
-          options: { align: 'right', fontFace: MONO, bold: true, color: C.rose, fill: { color: C.bgLight } },
+          options: { align: 'right', fontFace: MONO, bold: true, color: slide4CompColor, fill: { color: C.bgLight } },
         },
         {
           text: formatCurrencyCompact(payback.threeYearOmiliaTotal),
@@ -883,7 +895,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         { text: 'Legacy IVR', options: { align: 'right' } },
         {
           text: `${comp.turnLatencyLabel}\n${comp.egressLabel}`,
-          options: { align: 'right', color: C.rose },
+          options: { align: 'right', color: slide4CompColor },
         },
         {
           text: '<1s (<45ms Lexis)\nZero Egress · Neutral',
@@ -938,9 +950,9 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
       pptx,
       '04 · 36-MONTH CASH FLOW & DOWNSIDE SENSITIVITY',
       'Cumulative 3-Year Spend Trajectory & Break-Even Payback',
-      `Break-even achieved in ${
-        payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'
-      } · 3-Yr Cumulative Savings vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)}`,
+      `Break-even in ${
+        payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} mos` : 'N/A'
+      } (incl. ${payback.omiliaBuildMonths.toFixed(1)}m build + 2m ramp vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY) · 3-Yr Edge: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)}`,
       5,
       totalSlides,
       footerTag
@@ -956,13 +968,13 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
       fill: { color: C.white },
       line: { color: C.border, width: 1 },
     });
-    slide.addText('Cumulative 36-Month Spend Curve ($M, Incl. Setup & Self-Learning)', {
+    slide.addText('Cumulative 36-Month Spend ($M · Incl. Build Wait, 2-Mo Ramp & Outcome Fees)', {
       x: 0.82,
       y: 1.66,
       w: 6.75,
       h: 0.28,
       fontFace: FONT,
-      fontSize: 11.5,
+      fontSize: 10.8,
       bold: true,
       color: C.navy,
       margin: 0,
@@ -993,7 +1005,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         y: 2.02,
         w: 6.85,
         h: 4.5,
-        chartColors: ['64748B', C.rose, C.tealDark],
+        chartColors: ['64748B', comp.key === 'byollm' ? C.amber : C.rose, C.tealDark],
         lineSize: 2.5,
         lineDataSymbol: 'circle',
         lineDataSymbolSize: 5,
@@ -1043,14 +1055,14 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
       }
     );
     slide.addText(
-      `Why it compresses: Omilia's Closed-Loop Self-Learning continuously discovers recurring conversational patterns offline and promotes them—with mandatory human approval—into deterministic micro-flows, lowering effective unit cost 10% in Yr 2 and 18% by Yr 3 while competitor token costs climb.`,
+      `Why it compresses: Closed-Loop Self-Learning discovers recurring conversational patterns offline and promotes them—with mandatory human approval—into deterministic micro-flows, compressing Omilia’s variable outcome spend 10% in Yr 2 and 18% by Yr 3 strictly (retained agent payroll is untouched).`,
       {
         x: 8.22,
         y: 2.48,
         w: 4.3,
         h: 1.15,
         fontFace: FONT,
-        fontSize: 9.8,
+        fontSize: 9.6,
         color: C.slateText,
         margin: 0,
       }
@@ -1162,69 +1174,46 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         },
       ],
       [
-        { text: 'Competitor Baseline & Surge Shield', options: { bold: true, color: C.navy } },
-        { text: `${comp.shortLabel}\n${inputs.surge.toFixed(1)}x Surge`, options: { fontFace: MONO, color: C.tealDark } },
+        { text: 'Competitor Baseline, 35% Attempt Burn & Surge', options: { bold: true, color: C.navy } },
         {
-          text: 'Selects BYOLLM vs. DIY Hyperscaler cost mechanics & applies seasonal/outage volume spikes (1.0x–4.0x).',
-        },
-        {
-          text: `Proves why competitor token/ASR/TTS usage explodes nonlinearly (surge^${comp.surgeExponent.toFixed(2)}) during peaks while Omilia stays flat.`,
-        },
-      ],
-      [
-        { text: 'Blended Containment & AI Bootstrapping', options: { bold: true, color: C.navy, fill: { color: C.bgLight } } },
-        {
-          text: `${inputs.baseContainment}% → ${inputs.targetContainment}%\n(+${results.containmentLiftPct}% Lift)`,
-          options: { fontFace: MONO, color: C.tealDark, fill: { color: C.bgLight } },
-        },
-        {
-          text: 'Moves calls from Legacy DTMF + live agents into Omilia deterministic + agentic containment.',
-          options: { fill: { color: C.bgLight } },
-        },
-        {
-          text: `Primary deflection engine: shifts $${results.unitHumanCost.toFixed(2)} agent calls to flat $${inputs.omiliaOutcomeRate.toFixed(2)} resolution with 96%+ Day-1 NLU.`,
-          options: { fill: { color: C.bgLight } },
-        },
-      ],
-      [
-        { text: 'Outcome Pricing & Self-Learning', options: { bold: true, color: C.navy } },
-        {
-          text: `$${payback.omiliaUnitRatesByYear.yr1.toFixed(2)} → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/res`,
-          options: { fontFace: MONO, color: C.emerald },
-        },
-        {
-          text: 'Sets Year 1 price per resolved intent ($0.15–$1.00) and models Year 2 (-10%) & Year 3 (-18%) compression.',
-        },
-        {
-          text: 'Zero pass-through token or compute billing; CFOs pay only for completed outcomes while unit costs fall over 36 mos.',
-        },
-      ],
-      [
-        { text: 'TalkGuard Passive Biometrics', options: { bold: true, color: C.navy, fill: { color: C.bgLight } } },
-        {
-          text: inputs.talkguard ? `On (-${preset.roi.talkguardSec}s KBA)` : 'Disabled',
-          options: { fontFace: MONO, color: C.tealDark, fill: { color: C.bgLight } },
-        },
-        {
-          text: 'Toggles passive voice authentication & deepfake screening across escalated calls.',
-          options: { fill: { color: C.bgLight } },
-        },
-        {
-          text: 'Monetizes calls that STILL escalate to agents by removing KBA interrogation and stopping synthetic voice fraud.',
-          options: { fill: { color: C.bgLight } },
-        },
-      ],
-      [
-        { text: 'CSR CoPilot Real-Time Assist', options: { bold: true, color: C.navy } },
-        {
-          text: inputs.copilot ? `On (-${preset.roi.copilotSec}s ACW)` : 'Disabled',
+          text: `${comp.shortLabel}${
+            activeTierLabel ? ` (${BYOLLM_STACK_TIERS[results.byollmStackTier].shortLabel})` : ''
+          }\n${inputs.surge.toFixed(1)}x Surge`,
           options: { fontFace: MONO, color: C.tealDark },
         },
         {
-          text: 'Compresses After-Call Work (ACW) with automated live disposition & wrap-up summaries.',
+          text: 'Models BYOLLM (Flagship Voice vs. Discounted Mini) vs. DIY Hyperscaler setup, 35% failed/escalated attempt burn, license/drift tax, and peak surges (1.0x–4.0x).',
         },
         {
-          text: 'Expands ROI across 100% of inbound call volume—delivering value on complex escalations as well as full self-service.',
+          text: `Shows why metered token/ASR/TTS usage spikes on both unresolved escalations & peaks (surge^${comp.surgeExponent.toFixed(2)}) vs. flat Omilia rates.`,
+        },
+      ],
+      [
+        { text: 'Outcome Pricing ($0 Esc.) & Self-Learning', options: { bold: true, color: C.navy, fill: { color: C.bgLight } } },
+        {
+          text: `$${payback.omiliaUnitRatesByYear.yr1.toFixed(2)} → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/res`,
+          options: { fontFace: MONO, color: C.emerald, fill: { color: C.bgLight } },
+        },
+        {
+          text: 'Sets Year-1 rate per resolved outcome ($0 on escalations) and compresses Omilia variable spend -10% Yr2 / -18% Yr3.',
+          options: { fill: { color: C.bgLight } },
+        },
+        {
+          text: 'Zero pass-through LLM/ASR/TTS fees; buyers pay solely for completed resolutions while Self-Learning cuts Yr2–3 unit cost.',
+          options: { fill: { color: C.bgLight } },
+        },
+      ],
+      [
+        { text: 'Build Window, 2-Mo Ramp & Break-Even', options: { bold: true, color: C.navy } },
+        {
+          text: `Omilia ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'}\n(${payback.omiliaBuildMonths.toFixed(1)}m build + 2m)`,
+          options: { fontFace: MONO, color: C.tealDark },
+        },
+        {
+          text: `Models zero savings during build (${payback.omiliaBuildMonths.toFixed(1)}m vs. ${payback.byollmBuildMonths.toFixed(1)}m/${payback.diyBuildMonths.toFixed(1)}m) + 2-month phased traffic ramp (25%→60%→100%).`,
+        },
+        {
+          text: 'Delivers CFO-honest 36-month cash flow trajectories & color-coded break-even markers favoring fast AI Bootstrapping.',
         },
       ],
       [
@@ -1234,11 +1223,39 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
           options: { fontFace: MONO, color: C.tealDark, fill: { color: C.bgLight } },
         },
         {
-          text: 'Separates non-layoff P&L capture (attrition/BPO/surge avoidance) from Reclaimed Capacity, with dynamic agent shift sizing.',
+          text: 'Separates non-layoff cash capture (attrition, BPO flex-down, hiring avoidance) from Reclaimed Capacity, auto-sizing headcount.',
           options: { fill: { color: C.bgLight } },
         },
         {
-          text: 'Eliminates the "we won’t fire all agents Day 1" CFO objection while giving honest color-coded break-even timelines.',
+          text: 'Removes the "we won’t fire agents on Day 1" CFO objection while quantifying real queue-relief hours.',
+          options: { fill: { color: C.bgLight } },
+        },
+      ],
+      [
+        { text: 'TalkGuard & CSR CoPilot (Escalation Shield)', options: { bold: true, color: C.navy } },
+        {
+          text: `${inputs.talkguard ? `-${preset.roi.talkguardSec}s KBA` : 'TG Off'} · ${inputs.copilot ? `-${preset.roi.copilotSec}s ACW` : 'CP Off'}`,
+          options: { fontFace: MONO, color: C.tealDark },
+        },
+        {
+          text: 'Toggles passive background voice authentication + deepfake block and real-time CoPilot wrap-up automation.',
+        },
+        {
+          text: 'Monetizes 100% of inbound volume—compressing handle time & stopping spoofing even on calls that still escalate to agents.',
+        },
+      ],
+      [
+        { text: 'Customer Discovery Sheet (.xlsx) & AI Radar', options: { bold: true, color: C.navy, fill: { color: C.bgLight } } },
+        {
+          text: `${includedUseCases.length} Phase-1 Intents\n(.xlsx Round-Trip)`,
+          options: { fontFace: MONO, color: C.tealDark, fill: { color: C.bgLight } },
+        },
+        {
+          text: 'Downloads a 3-tab Excel discovery sheet for buyers, uploads completed inputs to configure all 5 tabs, and locks 80/20 Radar scope.',
+          options: { fill: { color: C.bgLight } },
+        },
+        {
+          text: 'Bridges async customer WFM workshops straight into fixed-scope HLEE timelines, POV charters, and board-ready decks.',
           options: { fill: { color: C.bgLight } },
         },
       ],
@@ -1246,14 +1263,14 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
 
     slide.addTable(walkthroughRows, {
       x: 0.6,
-      y: 1.48,
+      y: 1.46,
       w: 12.13,
-      colW: [2.45, 1.85, 3.65, 4.18],
+      colW: [2.5, 1.9, 3.7, 4.03],
       fontFace: FONT,
-      fontSize: 9.5,
+      fontSize: 8.8,
       color: C.slateText,
       border: { type: 'solid', pt: 0.5, color: C.borderLight },
-      margin: [0.07, 0.09, 0.07, 0.09],
+      margin: [0.05, 0.08, 0.05, 0.08],
       valign: 'middle',
     });
 

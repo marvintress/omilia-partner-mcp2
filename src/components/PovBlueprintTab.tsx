@@ -177,8 +177,8 @@ export const PovBlueprintTab: React.FC<PovBlueprintTabProps> = ({
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left 5 Columns: POV Scoping & Exit Criteria Controls */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* Left 5 Columns: POV Scoping & Exit Criteria Controls — summarized in print-only Charter table */}
+        <div className="no-print lg:col-span-5 space-y-6">
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div>
@@ -540,8 +540,8 @@ export const PovBlueprintTab: React.FC<PovBlueprintTabProps> = ({
           </section>
         </div>
 
-        {/* Right 7 Columns: 3-Week Sprint Plan, Exit Gate Scorecard, Prerequisites */}
-        <div className="lg:col-span-7 space-y-6">
+        {/* Right 7 Columns (Full 12-Col Width in PDF Print): 3-Week Sprint Plan, Exit Gate Scorecard, Prerequisites */}
+        <div className="lg:col-span-7 print:col-span-12 space-y-6">
           {/* Speed Comparison & 3-Week Sprint Timeline */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
@@ -764,6 +764,17 @@ export const PovBlueprintTab: React.FC<PovBlueprintTabProps> = ({
                 {povPlan.heroIntents
                   .map((u) => `${u.name} (${u.feas}F/${u.imp}I · ${isTopRightQuadrant(u) ? 'TR' : 'BR'})`)
                   .join('; ')}
+              </td>
+            </tr>
+            <tr>
+              <td className="py-2 pr-4 font-medium">Conversion Exit Thresholds</td>
+              <td className="py-2 pr-4 font-mono">
+                ≥{povConfig.nluTargetPct}% NLU · ≥{povConfig.taskTargetPct}% Task · &lt;{povConfig.latencyTargetMs}ms
+              </td>
+              <td className="py-2">
+                {povConfig.includeTalkguardTest
+                  ? `Includes TalkGuard Biometrics & Deepfake Screen (-${preset.roi.talkguardSec}s KBA)`
+                  : 'Standard Conversational + Zero Frontier Egress Gate'}
               </td>
             </tr>
           </tbody>

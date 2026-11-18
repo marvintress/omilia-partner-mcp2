@@ -1,6 +1,8 @@
 import type ExcelJS from 'exceljs';
 import {
   ApiReadiness,
+  BYOLLM_STACK_TIERS,
+  ByollmStackTier,
   COMPETITOR_PROFILES,
   CompetitorArchetype,
   DealMetadata,
@@ -26,6 +28,7 @@ export interface CustomerSheetSeedState {
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
   competitorArchetype: CompetitorArchetype;
+  byollmStackTier?: ByollmStackTier;
   povConfig: PovConfig;
   psDayRate: number;
   dealMeta: DealMetadata;
@@ -41,6 +44,7 @@ export interface ParsedCustomerIntake {
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
   competitorArchetype: CompetitorArchetype;
+  byollmStackTier: ByollmStackTier;
   psDayRate: number;
   povConfig: PovConfig;
   useCases: UseCase[];
@@ -75,6 +79,11 @@ const VERTICAL_LABELS: Record<VerticalKey, string> = {
 const COMPETITOR_LABELS: Record<CompetitorArchetype, string> = {
   byollm: 'Packaged BYOLLM (Cognigy / Kore / Parloa)',
   diy_hyperscaler: 'DIY Hyperscaler (OpenAI / Bedrock)',
+};
+
+const BYOLLM_TIER_LABELS: Record<ByollmStackTier, string> = {
+  flagship: BYOLLM_STACK_TIERS.flagship.label,
+  mini: BYOLLM_STACK_TIERS.mini.label,
 };
 
 const SOVEREIGNTY_LABELS: Record<SovereigntyTier, string> = {
@@ -346,17 +355,27 @@ const QUESTIONS: QuestionDef[] = [
     section: '4. Commercials & Architecture',
     question: 'Primary Alternative Architecture Under Review',
     allowed: 'Dropdown (BYOLLM / DIY Hyperscaler)',
-    guidance: 'Benchmarks Omilia TCO & break-even against Packaged BYOLLM or DIY builds.',
+    guidance: 'Benchmarks Omilia TCO & break-even against Packaged BYOLLM or DIY builds (incl. build wait, drift & 35% failed-call burn).',
     kind: 'enum',
     dropdown: Object.values(COMPETITOR_LABELS),
     getSeedValue: (s) => COMPETITOR_LABELS[s.competitorArchetype],
+  },
+  {
+    key: 'byollm_stack_tier',
+    section: '4. Commercials & Architecture',
+    question: 'Packaged BYOLLM Model & Speech Stack Tier',
+    allowed: 'Dropdown (Flagship Voice / Discounted Mini)',
+    guidance: 'Applies when BYOLLM is selected: Flagship Voice ($0.46/res base: Frontier LLM + Premium TTS) vs. Discounted Mini ($0.36/res base).',
+    kind: 'enum',
+    dropdown: Object.values(BYOLLM_TIER_LABELS),
+    getSeedValue: (s) => BYOLLM_TIER_LABELS[s.byollmStackTier ?? 'flagship'],
   },
   {
     key: 'omilia_outcome_rate',
     section: '4. Commercials & Architecture',
     question: 'Target Omilia Outcome Rate ($ / Resolved Call)',
     allowed: '0.15 – 1.00 USD (default 0.40)',
-    guidance: 'Flat Year-1 per-resolution commercial rate before Yr2–3 Self-Learning savings.',
+    guidance: 'Flat Year-1 per-resolution rate ($0 on unresolved escalations, zero pass-through token/ASR/TTS fees; -10% Yr2 / -18% Yr3).',
     kind: 'currency',
     numFmt: '$#,##0.00',
     min: 0.15,
@@ -772,6 +791,10 @@ export async function downloadCustomerSpreadsheet(
       'Percent of freed agent payroll realized as cash budget savings via natural attrition (25–35%/yr), BPO flex-down, and hiring avoidance—without assuming Day-1 layoffs. The remaining share stays in the contact center as Reclaimed Capacity.',
     ],
     [
+      'Outcome Pricing vs. Attempt Metering',
+      'Omilia charges a flat outcome rate per resolved call ($0 on unresolved escalations, zero token/ASR/TTS pass-through), compressing -10% Yr2 / -18% Yr3 via Self-Learning. BYOLLM & DIY stacks meter LLM/ASR/TTS across both resolved calls and ~35% failed/escalated bot attempts.',
+    ],
+    [
       'Legacy IVR Containment (%)',
       'Share of inbound calls currently resolved end-to-end in existing DTMF/IVR before transferring to a live agent.',
     ],
@@ -782,6 +805,10 @@ export async function downloadCustomerSpreadsheet(
     [
       'Build Window + 2-Mo Ramp',
       'Break-even payback accounts for implementation time (zero deflection during build) plus a 2-month post-launch ramp (25% -> 60% -> 100%) and Omilia consumption fees.',
+    ],
+    [
+      'Partial Fill & Round-Trip Sync',
+      'Leave any cell blank if unknown—on upload, the workbench inherits that vertical’s verified industry benchmarks and previews all changes before applying.',
     ],
   ];
   glossaryNotes.forEach((pair, idx) => {
@@ -952,6 +979,18 @@ function matchCompetitor(raw: string): CompetitorArchetype | null {
   }
   if (s.includes('byollm') || s.includes('packaged') || s.includes('cognigy') || s.includes('kore') || s.includes('parloa')) {
     return 'byollm';
+  }
+  return null;
+}
+
+function matchByollmTier(raw: string): ByollmStackTier | null {
+  const s = raw.trim().toLowerCase();
+  if (!s) return null;
+  if (s.includes('mini') || s.includes('discount') || s.includes('std') || s.includes('flash') || s.includes('0.36')) {
+    return 'mini';
+  }
+  if (s.includes('flagship') || s.includes('frontier') || s.includes('premium') || s.includes('eleven') || s.includes('0.46')) {
+    return 'flagship';
   }
   return null;
 }
@@ -1207,6 +1246,7 @@ export async function parseCustomerSpreadsheet(
   let sovereignty: SovereigntyTier = 'saas';
   let apiReadiness: ApiReadiness = 'modern';
   let competitorArchetype: CompetitorArchetype = 'byollm';
+  let byollmStackTier: ByollmStackTier = 'flagship';
   let psDayRate = 1800;
   const povConfig: PovConfig = { ...DEFAULT_POV_CONFIG };
 
@@ -1348,6 +1388,17 @@ export async function parseCustomerSpreadsheet(
       fieldsAppliedCount++;
     } else {
       warnings.push(`Competitor "${compStr}" unrecognized; kept ${COMPETITOR_PROFILES[competitorArchetype].shortLabel}.`);
+    }
+  }
+
+  const tierStr = getText('byollm_stack_tier');
+  if (tierStr) {
+    const m = matchByollmTier(tierStr);
+    if (m) {
+      byollmStackTier = m;
+      fieldsAppliedCount++;
+    } else {
+      warnings.push(`BYOLLM stack tier "${tierStr}" unrecognized; defaulted to Flagship Voice.`);
     }
   }
 
@@ -1512,7 +1563,9 @@ export async function parseCustomerSpreadsheet(
     },
     {
       label: 'Architecture & Baseline',
-      value: `${COMPETITOR_PROFILES[competitorArchetype].shortLabel} · ${sovereignty === 'baremetal' ? 'Bare Metal' : 'OCP SaaS'} · ${apiReadiness.toUpperCase()} APIs`,
+      value: `${COMPETITOR_PROFILES[competitorArchetype].shortLabel}${
+        competitorArchetype === 'byollm' ? ` (${BYOLLM_STACK_TIERS[byollmStackTier].shortLabel})` : ''
+      } · ${sovereignty === 'baremetal' ? 'Bare Metal' : 'OCP SaaS'} · ${apiReadiness.toUpperCase()} APIs`,
     },
     {
       label: 'Use Cases Imported',
@@ -1530,6 +1583,7 @@ export async function parseCustomerSpreadsheet(
     sovereignty,
     apiReadiness,
     competitorArchetype,
+    byollmStackTier,
     psDayRate,
     povConfig,
     useCases: finalUseCases,

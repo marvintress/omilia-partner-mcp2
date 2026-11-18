@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Check, Copy, Download, Printer, RotateCcw } from 'lucide-react';
 import {
+  BYOLLM_STACK_TIERS,
+  ByollmStackTier,
   COMPETITOR_PROFILES,
   CompetitorArchetype,
   VerticalPreset,
@@ -23,6 +25,8 @@ interface UnitEconomicsTabProps {
   sensitivity: SensitivityScenario[];
   competitorArchetype: CompetitorArchetype;
   onChangeCompetitor: (c: CompetitorArchetype) => void;
+  byollmStackTier: ByollmStackTier;
+  onChangeByollmStackTier: (tier: ByollmStackTier) => void;
   psDayRate: number;
   hleePsDays: number;
   hleeTimelineLabel: string;
@@ -42,6 +46,8 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
   sensitivity,
   competitorArchetype,
   onChangeCompetitor,
+  byollmStackTier,
+  onChangeByollmStackTier,
   psDayRate,
   hleePsDays,
   hleeTimelineLabel,
@@ -56,9 +62,12 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
   const [tableView, setTableView] = useState<'cfo' | 'sensitivity'>('cfo');
 
   const comp = results.competitorProfile;
+  const isByollm = comp.key === 'byollm';
+  const activeTier = BYOLLM_STACK_TIERS[byollmStackTier] ?? BYOLLM_STACK_TIERS.flagship;
 
   const bars = [
     {
+      key: 'legacy',
       label: 'Legacy Human + IVR',
       sub: `${Math.round(results.baseCont * 100)}% baseline containment`,
       val: results.annualLegacy,
@@ -66,15 +75,19 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
       textClass: 'text-slate-700 dark:text-slate-300',
     },
     {
-      label: `${comp.title} (${comp.examples})`,
-      sub: `${Math.round(results.diyContainment * 100)}% eff. · $${results.diyPerCallVariableRate.toFixed(2)}/call + ${
-        comp.key === 'byollm' ? 'license & ASR/TTS' : '40% drift tax'
+      key: 'competitor',
+      label: isByollm
+        ? `${comp.title} · ${activeTier.shortLabel} (${comp.examples})`
+        : `${comp.title} (${comp.examples})`,
+      sub: `${Math.round(results.diyContainment * 100)}% eff. · $${results.diyPerCallVariableRate.toFixed(2)}/res + 35% esc. attempt burn + ${
+        isByollm ? 'license' : '40% drift tax'
       }`,
       val: results.annualDiy,
-      colorClass: 'bg-rose-600 dark:bg-rose-500',
-      textClass: 'text-rose-700 dark:text-rose-400',
+      colorClass: isByollm ? 'bg-amber-600 dark:bg-amber-500' : 'bg-rose-600 dark:bg-rose-500',
+      textClass: isByollm ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400',
     },
     {
+      key: 'omilia',
       label: 'Omilia Vertically Integrated Sovereign Stack',
       sub: `${Math.round(results.targetCont * 100)}% blended · $${inputs.omiliaOutcomeRate.toFixed(2)}/res flat → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)} Yr3`,
       val: results.annualOmilia,
@@ -83,7 +96,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
     },
   ];
 
-  const maxBarScale = Math.max(results.chartScaleMax, results.annualLegacy, results.annualDiy, results.annualOmilia, 1);
+  const maxBarScale = Math.max(results.annualLegacy, results.annualDiy, results.annualOmilia, 1);
 
   return (
     <div className="space-y-6">
@@ -188,15 +201,22 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
       {/* Main 12-Column Workbench */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Controls (5 Columns) */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* Left Controls (5 Columns) — Hidden in PDF print in favor of clean Executive Assumptions Summary */}
+        <div className="no-print lg:col-span-5 space-y-6">
           {/* Volume & Surge Profile */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div>
-                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  Contact Center Volume &amp; Surge Profile
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                    Contact Center Volume &amp; Surge Profile
+                  </h2>
+                  <InfoTooltip
+                    label="Contact Center Volume & Surge Profile"
+                    description="Configures monthly inbound volume, legacy IVR baseline containment, target Omilia containment, flat outcome rate ($0 on escalations), AHT, and peak surge multiplier."
+                    tcoImpact="Drives call-deflection savings, competitor 35% escalated attempt burn vs. Omilia outcome fees, and 36-month cash flow."
+                  />
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {preset.name} baseline assumptions
                 </p>
@@ -204,7 +224,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <button
                 type="button"
                 onClick={onResetVerticalDefaults}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
+                className="no-print inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
                 title="Reset inputs to vertical preset defaults"
               >
                 <RotateCcw className="h-3 w-3" />
@@ -773,8 +793,8 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           </section>
         </div>
 
-        {/* Right Visualizations & CFO Table (7 Columns) */}
-        <div className="lg:col-span-7 space-y-6">
+        {/* Right Visualizations & CFO Table (Full 12-Col Width in PDF Print) */}
+        <div className="lg:col-span-7 print:col-span-12 space-y-6">
           {/* Competitor Architecture Baseline Selector & TCO Chart */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             {/* Competitor Architecture Selector Bar */}
@@ -786,7 +806,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 <InfoTooltip
                   label="Competitor Architecture Baseline"
                   description="Compare Omilia's vertically integrated Sovereign Stack against either Packaged BYOLLM platforms (NiCE Cognigy, Kore.ai, Parloa) or custom DIY Hyperscaler stacks (Azure OpenAI / Bedrock)."
-                  tcoImpact="Each baseline models realistic upfront build costs ($180K–$300K vs. $450K–$750K), pass-through token/ASR/TTS metering or 40% schema-drift maintenance taxes, and turn-latency attrition."
+                  tcoImpact="Each baseline models upfront build costs ($180K–$300K vs. $450K–$750K), pass-through token/ASR/TTS metering across BOTH resolved and failed/escalated attempts (35% turn burn vs. Omilia $0 on unresolved escalations), and turn-latency attrition."
                 />
               </div>
 
@@ -817,10 +837,54 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               </div>
             </div>
 
+            {isByollm && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-3 dark:border-slate-800">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
+                    BYOLLM Model &amp; Speech Stack
+                  </span>
+                  <InfoTooltip
+                    label="BYOLLM Model & Speech Stack Tier"
+                    description="Switches Cognigy / Kore / Parloa pass-through voice AI stack pricing between Flagship Voice (frontier/realtime LLM + commercial ASR + ElevenLabs-tier premium neural TTS + orchestration at $0.46/res base, surge^0.15) and Discounted Mini (mini/flash LLM + standard TTS at $0.36/res base, surge^0.28)."
+                    tcoImpact="Updates pass-through $/resolved pricing across Year-1 TCO bars, 36-month cumulative cash flow, and CFO breakdowns while holding containment constant."
+                  />
+                </div>
+
+                <div
+                  role="group"
+                  aria-label="BYOLLM Model and Speech Stack Tier"
+                  className="no-print inline-flex items-center rounded-lg bg-slate-100 p-0.5 dark:bg-slate-950"
+                >
+                  {(['flagship', 'mini'] as ByollmStackTier[]).map((tierKey) => {
+                    const tier = BYOLLM_STACK_TIERS[tierKey];
+                    const selected = byollmStackTier === tierKey;
+                    return (
+                      <button
+                        key={tierKey}
+                        type="button"
+                        onClick={() => onChangeByollmStackTier(tierKey)}
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                          selected
+                            ? 'bg-white text-slate-900 shadow-xs font-semibold dark:bg-slate-800 dark:text-slate-50'
+                            : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {tier.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Active Baseline Cost & Architecture Mechanics Note */}
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-slate-100 pb-4 text-[11.5px] leading-relaxed dark:border-slate-800">
               <div className="text-slate-600 dark:text-slate-300">
-                <strong className="font-semibold text-rose-700 dark:text-rose-400">
+                <strong
+                  className={`font-semibold ${
+                    isByollm ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400'
+                  }`}
+                >
                   {COMPETITOR_PROFILES[competitorArchetype].shortLabel} Cost Mechanics:
                 </strong>{' '}
                 {comp.commercialSummary}
@@ -887,7 +951,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 {bars.map((bar) => {
                   const widthPct = Math.max(4, Math.min(100, (bar.val / maxBarScale) * 100));
                   return (
-                    <div key={bar.label}>
+                    <div key={bar.key}>
                       <div className="flex items-baseline justify-between gap-4 mb-1.5">
                         <div className="flex flex-wrap items-baseline gap-2">
                           <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
@@ -1281,7 +1345,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           </section>
 
           {/* CFO Breakdown & Containment Sensitivity Table */}
-          <section className="rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+          <section className="print:break-before-page rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
               <div>
                 <div className="flex items-center gap-1.5">
@@ -1298,7 +1362,9 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {tableView === 'cfo'
-                    ? `Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`
+                    ? `Omilia Sovereign Stack vs. ${comp.title}${
+                        isByollm ? ` · ${activeTier.label}` : ''
+                      } (${comp.examples})`
                     : 'Stress-tests annual savings, payback months, and FTE capacity across conservative to aggressive containment'}
                 </p>
               </div>
@@ -1376,7 +1442,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                       <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-600 dark:text-slate-400">
                         $0 (Sunk)
                       </td>
-                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-rose-700 dark:text-rose-400">
+                      <td
+                        className={`px-4 py-3.5 text-right font-mono tabular-nums ${
+                          isByollm ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400'
+                        }`}
+                      >
                         {formatCurrencyFull(payback.competitorSetupCost)} ({comp.timeToValueLabel})
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
@@ -1404,7 +1474,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                       <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
                         {formatCurrencyFull(results.legacyPlatformSpendMo)}
                       </td>
-                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-rose-700 dark:text-rose-400">
+                      <td
+                        className={`px-4 py-3.5 text-right font-mono tabular-nums ${
+                          isByollm ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400'
+                        }`}
+                      >
                         {formatCurrencyFull(results.diyPlatformSpendMo)}
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
@@ -1439,7 +1513,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                       <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
                         {formatCurrencyCompact(payback.threeYearLegacyTotal)}
                       </td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-rose-700 dark:text-rose-400">
+                      <td
+                        className={`px-4 py-3.5 text-right font-mono font-bold tabular-nums ${
+                          isByollm ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400'
+                        }`}
+                      >
                         {formatCurrencyCompact(payback.threeYearDiyTotal)}
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
@@ -1453,7 +1531,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                       <td className="px-4 py-3.5 text-right text-slate-600 dark:text-slate-400">
                         Legacy IVR
                       </td>
-                      <td className="px-4 py-3.5 text-right font-medium text-rose-700 dark:text-rose-400">
+                      <td
+                        className={`px-4 py-3.5 text-right font-medium ${
+                          isByollm ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400'
+                        }`}
+                      >
                         {comp.turnLatencyLabel} · {comp.egressLabel}
                       </td>
                       <td className="px-6 py-3.5 text-right font-semibold text-emerald-700 dark:text-emerald-400">
@@ -1531,9 +1613,9 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
         <table className="mt-3 w-full text-left text-xs border-collapse">
           <thead>
             <tr className="border-b border-slate-300 text-slate-600">
-              <th className="py-2 pr-4">Volume &amp; Containment Inputs</th>
+              <th className="py-2 pr-4">Volume &amp; Commercial Inputs</th>
               <th className="py-2 pr-4">Value</th>
-              <th className="py-2 pr-4">Workforce &amp; AI Assist Inputs</th>
+              <th className="py-2 pr-4">Workforce &amp; Modeling Inputs</th>
               <th className="py-2">Value</th>
             </tr>
           </thead>
@@ -1561,9 +1643,30 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               </td>
             </tr>
             <tr>
+              <td className="py-2 pr-4 font-medium">Omilia Outcome Rate ($0 Esc.)</td>
+              <td className="py-2 pr-4 font-mono">
+                ${inputs.omiliaOutcomeRate.toFixed(2)} Yr1 → ${payback.omiliaUnitRatesByYear.yr3.toFixed(2)} Yr3
+              </td>
+              <td className="py-2 pr-4 font-medium">Active Agents &amp; Shift Sizing</td>
+              <td className="py-2 font-mono">
+                {inputs.agents.toLocaleString()} FTEs ({inputs.autoFitAgents !== false ? 'Auto-Fit' : 'Manual'}) · {inputs.shiftHours}h × {inputs.workDays}d
+              </td>
+            </tr>
+            <tr>
+              <td className="py-2 pr-4 font-medium">Competitor Baseline (35% Burn)</td>
+              <td className="py-2 pr-4 font-mono">
+                {comp.title}
+                {isByollm ? ` · ${activeTier.shortLabel}` : ''} ({comp.setupRangeLabel})
+              </td>
+              <td className="py-2 pr-4 font-medium">Build Delay &amp; Traffic Ramp</td>
+              <td className="py-2 font-mono">
+                {payback.omiliaBuildMonths.toFixed(1)}m Omilia build + 2m ramp (25%→60%→100%)
+              </td>
+            </tr>
+            <tr>
               <td className="py-2 pr-4 font-medium">Hard P&amp;L Labor Realization</td>
               <td className="py-2 pr-4 font-mono">
-                {results.laborRealizationPct}% (Non-Layoff Capture)
+                {results.laborRealizationPct}% (Zero Day-1 Layoffs)
               </td>
               <td className="py-2 pr-4 font-medium">Reclaimed Queue Capacity</td>
               <td className="py-2 font-mono">

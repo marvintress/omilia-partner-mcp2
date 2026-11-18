@@ -111,7 +111,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 print:block print:space-y-4 gap-6 items-start">
         {/* Left 7 Columns: 2x2 Matrix + Custom Use-Case Builder */}
         <div className="lg:col-span-7 space-y-6">
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
@@ -633,8 +633,8 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
             )}
           </section>
 
-          {/* Vertical Use-Case Portfolio List */}
-          <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          {/* Vertical Use-Case Portfolio List — hidden in print because Complete Discovery Specifications table below prints all items unclipped */}
+          <section className="no-print rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div>
                 <div className="flex items-center gap-1.5">
@@ -772,7 +772,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
       </div>
 
       {/* Print-Only Complete Matrix */}
-      <section className="print-only rounded-xl border border-slate-300 bg-white p-5">
+      <section className="print-only print:break-before-page rounded-xl border border-slate-300 bg-white p-5">
         <h3 className="font-display text-sm font-bold text-slate-900">
           AI Radar 2.0 — Complete Discovery Specifications ({preset.name})
         </h3>

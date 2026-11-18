@@ -3,6 +3,40 @@ export type PartnerMotion = 'ccaas' | 'gsi' | 'bpo';
 export type SovereigntyTier = 'saas' | 'baremetal';
 export type ApiReadiness = 'modern' | 'mixed' | 'mainframe';
 export type CompetitorArchetype = 'byollm' | 'diy_hyperscaler';
+export type ByollmStackTier = 'flagship' | 'mini';
+
+export interface ByollmStackTierProfile {
+  key: ByollmStackTier;
+  shortLabel: string;
+  label: string;
+  description: string;
+  baseVariableRate: number;
+  surgeExponent: number;
+  monthlyLicenseOrTaxBase: number;
+}
+
+export const BYOLLM_STACK_TIERS: Record<ByollmStackTier, ByollmStackTierProfile> = {
+  flagship: {
+    key: 'flagship',
+    shortLabel: 'Flagship Voice',
+    label: 'Flagship Voice (Frontier LLM + Premium TTS)',
+    description:
+      'Models enterprise voice stacks combining a flagship/realtime LLM (GPT-4o / Claude / Gemini Pro), commercial ASR/STT, premium neural TTS (ElevenLabs tier), and an orchestrator license ($0.46/res base, surge^0.15).',
+    baseVariableRate: 0.46,
+    surgeExponent: 0.15,
+    monthlyLicenseOrTaxBase: 15000,
+  },
+  mini: {
+    key: 'mini',
+    shortLabel: 'Discounted Mini',
+    label: 'Discounted Mini (Mini LLM + Std TTS)',
+    description:
+      'Models cost-optimized volume contracts using a mini/flash LLM, standard neural TTS, commercial ASR, and orchestrator platform license ($0.36/res base, surge^0.28).',
+    baseVariableRate: 0.36,
+    surgeExponent: 0.28,
+    monthlyLicenseOrTaxBase: 15000,
+  },
+};
 
 export interface CompetitorProfile {
   key: CompetitorArchetype;
@@ -33,7 +67,7 @@ export const COMPETITOR_PROFILES: Record<CompetitorArchetype, CompetitorProfile>
     examples: 'NiCE Cognigy, Kore.ai, Parloa',
     tableHeader: 'Packaged BYOLLM',
     commercialSummary:
-      'Moderate upfront PS ($180K–$300K) + annual platform license + metered pass-through charges for third-party frontier LLM tokens, ASR/STT, and TTS that escalate with RAG context windows.',
+      'Moderate upfront PS ($180K–$300K) + annual platform license + metered pass-through LLM tokens, ASR/STT, and TTS billed on both resolved calls and failed/escalated attempts (35% turn burn before handoff).',
     architectureSummary:
       'Multi-hop API chain (CCaaS → Orchestrator → External ASR → LLM → External TTS) yields 1.8s–2.8s latency, third-party data egress, and CCaaS ecosystem lock-in risk.',
     setupRangeLabel: '$180K–$300K PS',
@@ -42,9 +76,9 @@ export const COMPETITOR_PROFILES: Record<CompetitorArchetype, CompetitorProfile>
     egressLabel: 'External LLM / TTS Egress',
     ecosystemLabel: 'CCaaS Lock-In Conflict (NiCE vs. Genesys/AWS/RC)',
     waterfallLatencyMs: 2150,
-    baseVariableRate: 0.44,
-    surgeExponent: 1.28,
-    monthlyLicenseOrTaxBase: 14500,
+    baseVariableRate: 0.46,
+    surgeExponent: 0.15,
+    monthlyLicenseOrTaxBase: 15000,
     maintenanceTaxLabel: 'Annual License + Pass-Through Token/ASR/TTS',
     containmentLag: 0.06,
   },
@@ -55,7 +89,7 @@ export const COMPETITOR_PROFILES: Record<CompetitorArchetype, CompetitorProfile>
     examples: 'Azure OpenAI / AWS Bedrock + Twilio / Connect',
     tableHeader: 'DIY Hyperscaler',
     commercialSummary:
-      'Heavy custom engineering build ($450K–$750K over 6–9 mos), 40% ongoing integration & schema-drift maintenance tax, plus raw token-burn volatility during peak call spikes.',
+      'Heavy custom engineering build ($450K–$750K over 6–9 mos), 40% ongoing integration & schema-drift maintenance tax, plus raw ASR/LLM/TTS token burn on both contained and escalated attempts.',
     architectureSummary:
       '2.5s–3.5s dead air risk, lacks native 8kHz telephony acoustic tuning, and requires custom engineering for PCI Level 1 masking and passive voice biometrics.',
     setupRangeLabel: '$450K–$750K Build',
@@ -64,11 +98,11 @@ export const COMPETITOR_PROFILES: Record<CompetitorArchetype, CompetitorProfile>
     egressLabel: 'Public Cloud / Frontier Egress',
     ecosystemLabel: 'No Turnkey PCI L1 / TalkGuard Biometrics',
     waterfallLatencyMs: 2950,
-    baseVariableRate: 0.58,
-    surgeExponent: 1.38,
-    monthlyLicenseOrTaxBase: 39900,
+    baseVariableRate: 0.38,
+    surgeExponent: 0.50,
+    monthlyLicenseOrTaxBase: 34000,
     maintenanceTaxLabel: '+40% Integration & Schema-Drift Tax',
-    containmentLag: 0.11,
+    containmentLag: 0.10,
   },
 };
 
@@ -828,12 +862,12 @@ server.tool(
   async ({ vertical, monthlyCallVolume, baseContainmentPct, targetContainmentPct, omiliaOutcomeRate, ahtSeconds, surgeMultiplier, unitHumanCostPerCall }) => {
     const baseCont = baseContainmentPct / 100;
     const targetCont = Math.max(baseCont + 0.05, targetContainmentPct / 100);
-    const diyCont = Math.max(baseCont + 0.08, targetCont - 0.11);
+    const diyCont = Math.max(baseCont + 0.08, targetCont - 0.10);
     const effectiveCalls = monthlyCallVolume * surgeMultiplier;
     const legacyMo = (effectiveCalls * (1 - baseCont) * unitHumanCostPerCall) + (effectiveCalls * baseCont * 0.14);
     const omiliaMo = (effectiveCalls * targetCont * omiliaOutcomeRate) + (effectiveCalls * (1 - targetCont) * (unitHumanCostPerCall * 0.83)) + 6500;
-    const diyTokenRate = 0.58 * Math.pow(surgeMultiplier, 1.38);
-    const diyMo = (effectiveCalls * diyCont * diyTokenRate) + (effectiveCalls * (1 - diyCont) * unitHumanCostPerCall) + 28500;
+    const diyTokenRate = 0.38 * Math.pow(surgeMultiplier, 0.50);
+    const diyMo = (effectiveCalls * (diyCont + (1 - diyCont) * 0.35) * diyTokenRate) + (effectiveCalls * (1 - diyCont) * unitHumanCostPerCall) + 34000;
     const payload = {
       vertical,
       annualLegacyTcoUsd: Math.round(legacyMo * 12),
