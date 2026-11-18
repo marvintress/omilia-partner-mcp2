@@ -1134,7 +1134,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                         {Math.round(results.diyContainment * 100)}% (latency drop-off)
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
-                        {Math.round(results.targetCont * 100)}% Blended (95%+ Day-1)
+                        {Math.round(results.targetCont * 100)}% Blended (90%+ Task Resolution / 96%+ Day-1 NLU)
                       </td>
                     </tr>
                     <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
@@ -1242,6 +1242,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 </table>
               )}
             </div>
+
+            {tableView === 'cfo' && (
+              <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-3 text-[11px] leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Note:</span>{' '}
+                Blended Containment measures total contact-center-wide call deflection across all inbound traffic, while{' '}
+                <span className="font-mono font-medium text-slate-700 dark:text-slate-300">96%+ Day-1 NLU</span> and{' '}
+                <span className="font-mono font-medium text-slate-700 dark:text-slate-300">90%+ Task Resolution</span>{' '}
+                reflect Day-1 AI Bootstrapped intent accuracy and in-scope workflow completion.
+              </div>
+            )}
           </section>
         </div>
       </div>
