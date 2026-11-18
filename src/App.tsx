@@ -79,8 +79,10 @@ function buildDefaultRoiInputs(preset: VerticalPreset): RoiInputs {
     talkguard: true,
     copilot: true,
     agents: 500,
+    autoFitAgents: true,
     shiftHours: 8,
     workDays: 21.5,
+    laborRealizationPct: 65,
   };
   return {
     ...baseInputs,
@@ -128,7 +130,17 @@ export default function App() {
       telecom: buildDefaultRoiInputs(VERTICAL_PRESETS.telecom),
     };
     if (urlSeed && VERTICAL_PRESETS[urlSeed.vertical]) {
-      base[urlSeed.vertical] = urlSeed.inputs;
+      const seedInputs: RoiInputs = {
+        ...urlSeed.inputs,
+        laborRealizationPct: urlSeed.inputs.laborRealizationPct ?? 65,
+        autoFitAgents:
+          urlSeed.inputs.autoFitAgents ??
+          urlSeed.inputs.agents === computeFittedAgents(urlSeed.inputs),
+      };
+      base[urlSeed.vertical] =
+        seedInputs.autoFitAgents !== false
+          ? { ...seedInputs, agents: computeFittedAgents(seedInputs) }
+          : seedInputs;
     }
     return base;
   });
@@ -300,13 +312,37 @@ export default function App() {
   };
 
   const handleUpdateInput = <K extends keyof RoiInputs>(key: K, val: RoiInputs[K]) => {
-    setRoiByVertical((prev) => ({
-      ...prev,
-      [vertical]: {
-        ...prev[vertical],
+    setRoiByVertical((prev) => {
+      const current = prev[vertical];
+      const next: RoiInputs = {
+        ...current,
         [key]: val,
-      },
-    }));
+      };
+
+      if (key === 'agents') {
+        next.autoFitAgents = false;
+      } else if (key === 'autoFitAgents') {
+        if (val !== false) {
+          next.agents = computeFittedAgents(next);
+        }
+      } else if (
+        current.autoFitAgents !== false &&
+        (key === 'callVolume' ||
+          key === 'baseContainment' ||
+          key === 'aht' ||
+          key === 'acw' ||
+          key === 'occupancy' ||
+          key === 'shiftHours' ||
+          key === 'workDays')
+      ) {
+        next.agents = computeFittedAgents(next);
+      }
+
+      return {
+        ...prev,
+        [vertical]: next,
+      };
+    });
   };
 
   const handleUpdateDealMeta = <K extends keyof DealMetadata>(key: K, val: DealMetadata[K]) => {
@@ -342,9 +378,22 @@ export default function App() {
   };
 
   const handleAutoFitFtes = () => {
-    const fitted = computeFittedAgents(inputs);
-    handleUpdateInput('agents', fitted);
-    notify(`Auto-fitted active workforce to ${fitted.toLocaleString()} agents`);
+    const currentlyLive = inputs.autoFitAgents !== false;
+    if (currentlyLive) {
+      handleUpdateInput('autoFitAgents', false);
+      notify(`Switched Active Agents to manual control (${inputs.agents.toLocaleString()} agents)`);
+    } else {
+      const fitted = computeFittedAgents(inputs);
+      setRoiByVertical((prev) => ({
+        ...prev,
+        [vertical]: {
+          ...prev[vertical],
+          autoFitAgents: true,
+          agents: fitted,
+        },
+      }));
+      notify(`Dynamic Auto-Fit enabled (${fitted.toLocaleString()} agents synced live)`);
+    }
   };
 
   const handleResetVerticalRoi = () => {
@@ -514,7 +563,19 @@ export default function App() {
     const p = deal.payload;
     if (!VERTICAL_PRESETS[p.vertical]) return;
     setVertical(p.vertical);
-    setRoiByVertical((prev) => ({ ...prev, [p.vertical]: p.inputs }));
+    const loadedInputs: RoiInputs = {
+      ...p.inputs,
+      laborRealizationPct: p.inputs.laborRealizationPct ?? 65,
+      autoFitAgents:
+        p.inputs.autoFitAgents ?? p.inputs.agents === computeFittedAgents(p.inputs),
+    };
+    setRoiByVertical((prev) => ({
+      ...prev,
+      [p.vertical]:
+        loadedInputs.autoFitAgents !== false
+          ? { ...loadedInputs, agents: computeFittedAgents(loadedInputs) }
+          : loadedInputs,
+    }));
     setUseCasesByVertical((prev) => ({ ...prev, [p.vertical]: p.useCases }));
     setSelectedUcByVertical((prev) => ({ ...prev, [p.vertical]: p.useCases[0]?.id ?? null }));
     setPartnerMotion(p.partnerMotion);
@@ -624,9 +685,11 @@ export default function App() {
       `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`,
       `Monthly Inbound Calls: ${inputs.callVolume.toLocaleString()} (${inputs.surge.toFixed(1)}x surge = ${Math.round(roiResults.effectiveMonthlyCalls).toLocaleString()} calls/mo)`,
       `Containment: ${Math.round(roiResults.baseCont * 100)}% Baseline -> ${Math.round(roiResults.targetCont * 100)}% Omilia (+${roiResults.containmentLiftPct}% Lift)`,
-      `Annual Net Savings: ${formatCurrencyCompact(roiResults.annualNetSavings)} | 3-Year vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)}`,
+      `Hard P&L Labor Realization: ${roiResults.laborRealizationPct}% (attrition, BPO flex-down & hiring avoidance — zero Day-1 layoffs)`,
+      `Annual Hard P&L Savings: ${formatCurrencyCompact(roiResults.annualNetSavings)} | Reclaimed Capacity Value: ${formatCurrencyCompact(roiResults.annualCapacityReinvestedValue)}/yr`,
+      `3-Year TCO Advantage vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)}`,
       `Self-Learning Outcome Rate: $${payback.omiliaUnitRatesByYear.yr1.toFixed(2)}/res (Yr1) -> $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/res (Yr3)`,
-      `Break-Even Payback: ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/d vs. ${comp.setupRangeLabel})`,
+      `Break-Even Payback (Hard P&L): ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/d vs. ${comp.setupRangeLabel})`,
       `Capacity Reclaimed: ${roiResults.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(roiResults.ftesFreed).toLocaleString()} FTEs freed)`,
       `Annualized Yr1 TCO: Legacy ${formatCurrencyCompact(roiResults.annualLegacy)} | ${comp.tableHeader} ${formatCurrencyCompact(roiResults.annualDiy)} | Omilia ${formatCurrencyCompact(roiResults.annualOmilia)}`,
     ]

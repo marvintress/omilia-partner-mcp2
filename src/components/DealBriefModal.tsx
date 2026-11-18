@@ -188,12 +188,14 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
           {/* Financial Highlights Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/60">
             <div className="p-4">
-              <div className="text-xs text-slate-500 dark:text-slate-400">Annual Net Savings</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Hard P&amp;L Savings ({results.laborRealizationPct}%)
+              </div>
               <div className="mt-1 font-mono text-xl font-bold tabular-nums text-teal-700 dark:text-teal-400">
                 {formatCurrencyCompact(results.annualNetSavings)}
               </div>
               <div className="mt-0.5 text-[11px] text-slate-500 tabular-nums">
-                {formatCurrencyCompact(results.monthlyNetSavings)}/mo vs baseline
+                +{formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr capacity
               </div>
             </div>
             <div className="p-4">

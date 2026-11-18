@@ -92,11 +92,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <div className="p-5">
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-              <span>Annual Net Savings</span>
+              <span>Annual Hard P&amp;L Savings</span>
               <InfoTooltip
-                label="Annual Net Savings"
-                description="Year-1 annualized run-rate savings comparing your Legacy Human + IVR baseline against Omilia OCP at current volume and peak surge."
-                tcoImpact="Driven upward by Target Containment, Loaded Human Cost/Call, TalkGuard, CoPilot, and Peak Surge."
+                label="Annual Hard P&L Savings"
+                description={`Year-1 annualized cash savings vs. Legacy Human + IVR at ${results.laborRealizationPct}% Hard P&L Labor Realization (captured via natural attrition, BPO flex-down, and hiring avoidance—never assuming Day-1 layoffs). The remaining ${100 - results.laborRealizationPct}% stays in operations as ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity.`}
+                tcoImpact="Separates bankable CFO P&L cost takeout from frontline queue capacity relief so financial break-even stays defensible."
                 placement="bottom"
               />
             </div>
@@ -169,9 +169,9 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
               <span>Equivalent FTEs Freed</span>
               <InfoTooltip
-                label="Equivalent FTEs Freed"
-                description="Total monthly agent hours reclaimed divided by Shift Hrs/Day × Work Days/Mo."
-                tcoImpact="Demonstrates hiring avoidance during seasonal peaks or capacity reallocation to higher-value retention queues."
+                label="Equivalent FTEs Freed & Reclaimed Capacity"
+                description={`Total monthly agent hours reclaimed divided by Shift Hrs/Day × Work Days/Mo. At ${results.laborRealizationPct}% Hard P&L capture, unharvested hours stay in the queue as ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity (zero layoffs).`}
+                tcoImpact="Quantifies both hard hiring/BPO avoidance and non-layoff queue relief for retention and CSAT."
                 placement="bottom"
                 align="right"
               />
@@ -180,7 +180,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               {Math.round(results.ftesFreed).toLocaleString()} FTEs
             </div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-              Loaded human cost: ${results.unitHumanCost.toFixed(2)}/call
+              ${results.unitHumanCost.toFixed(2)}/call · +{formatCurrencyCompact(results.annualCapacityReinvestedValue)} capacity
             </div>
           </div>
         </div>
@@ -388,18 +388,27 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                   Agent Cost Shaping &amp; AI Assist
                 </h2>
                 <InfoTooltip
-                  label="Labor Shaping & Auto-Fit FTEs"
-                  description="Computes loaded human cost/call from wage, burden, occupancy, AHT, and ACW. Auto-Fit sizes agents to residual uncontained volume."
+                  label="Labor Shaping & Dynamic Auto-Fit FTEs"
+                  description="Computes loaded human cost/call from wage, burden, occupancy, AHT, and ACW. When Auto-Fit is Live (default), Active Agents scales automatically whenever call volume, baseline containment, handle time, occupancy, or shift schedule changes."
                   tcoImpact="Higher loaded labor costs increase baseline spend and raise net dollar TCO savings per deflected or assisted interaction."
                 />
               </div>
               <button
                 type="button"
                 onClick={onAutoFitFtes}
-                className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
-                title="Size active agents to residual uncontained volume"
+                aria-pressed={inputs.autoFitAgents !== false}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  inputs.autoFitAgents !== false
+                    ? 'border-teal-600 bg-teal-50 text-teal-800 hover:bg-teal-100 dark:border-teal-500 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-950'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
+                }`}
+                title="Toggle dynamic auto-sizing of active agents to baseline uncontained volume"
               >
-                Auto-Fit FTEs
+                <Check
+                  className={`h-3 w-3 ${inputs.autoFitAgents !== false ? 'opacity-100' : 'opacity-30'}`}
+                  aria-hidden="true"
+                />
+                {inputs.autoFitAgents !== false ? 'Auto-Fit: Live' : 'Enable Auto-Fit'}
               </button>
             </div>
 
@@ -625,11 +634,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <div>
                 <div className="flex items-center gap-1 mb-1">
                   <label htmlFor="inpAgents" className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                    Active Agents
+                    Active Agents ({inputs.autoFitAgents !== false ? 'Auto' : 'Manual'})
                   </label>
                   <InfoTooltip
-                    label="Active Agents"
-                    description="Current live agent headcount handling uncontained calls (use Auto-Fit FTEs to size automatically)."
+                    label="Active Agents (Dynamic Auto-Fit)"
+                    description="Live-sized from baseline uncontained volume, (AHT + ACW), occupancy, and shift hours while Auto-Fit is Live. Typing a custom headcount switches smoothly to Manual mode."
                     tcoImpact="Adjusts Days/Mo per Agent Saved without changing dollar TCO savings."
                   />
                 </div>
@@ -689,6 +698,76 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                   onChange={(e) => onUpdateInput('workDays', Number(e.target.value) || 21.5)}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-mono text-xs tabular-nums text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
+              </div>
+            </div>
+
+            {/* Hard P&L Labor Realization (%) */}
+            <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <label
+                    htmlFor="inpLaborRealization"
+                    className="font-semibold text-slate-800 dark:text-slate-200"
+                  >
+                    Hard P&amp;L Labor Realization (%)
+                  </label>
+                  <InfoTooltip
+                    label="Hard P&L Labor Realization (%) — Zero-Layoff Modeling"
+                    description="Controls what share of freed agent payroll turns into hard P&L cash savings (via natural 25–35% annual attrition, BPO flex-down, and surge/overtime hiring avoidance) vs. Reclaimed Capacity reinvested in shorter queues with zero layoffs."
+                    tcoImpact="Platform/outcome/token spend stays 100% cash. Lowering realization shifts break-even markers rightward across all models so CFOs see an honest hard-cash payback timeline."
+                  />
+                </span>
+                <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                  {results.laborRealizationPct}% Hard P&amp;L
+                </span>
+              </div>
+
+              <input
+                id="inpLaborRealization"
+                type="range"
+                min={25}
+                max={100}
+                step={5}
+                value={results.laborRealizationPct}
+                onChange={(e) => onUpdateInput('laborRealizationPct', Number(e.target.value))}
+              />
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                {[
+                  { label: 'Conservative (50%)', val: 50 },
+                  { label: 'Realistic P&L (65%)', val: 65 },
+                  { label: 'Capacity Value (100%)', val: 100 },
+                ].map((opt) => {
+                  const isActive = results.laborRealizationPct === opt.val;
+                  return (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => onUpdateInput('laborRealizationPct', opt.val)}
+                      className={`rounded-md border px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                        isActive
+                          ? 'border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-500 dark:bg-teal-950/50 dark:text-teal-300'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                <span>
+                  Reclaimed non-layoff capacity:{' '}
+                  <strong className="font-mono text-slate-800 dark:text-slate-200">
+                    {formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr
+                  </strong>
+                </span>
+                <span>
+                  {results.laborRealizationPct === 100
+                    ? 'Full FTE cost-out view'
+                    : `${100 - results.laborRealizationPct}% reinvested in CSAT / surge shield`}
+                </span>
               </div>
             </div>
           </section>
@@ -764,15 +843,15 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                       : `36-Month Cumulative Cash Flow & Self-Learning Compression (${comp.shortLabel})`}
                   </h2>
                   <InfoTooltip
-                    label="Annual TCO vs. 36-Month Cash Flow"
-                    description="Switch between Year-1 annualized run-rate bars and the 36-month cumulative curve showing upfront PS break-even and Offline Self-Learning compression (-10% Yr2, -18% Yr3)."
-                    tcoImpact="Proves both Day-1 annual savings and how long it takes cumulative cash savings to recover upfront Phase 1 PS."
+                    label="Annual TCO vs. 36-Month Cash Flow & Break-Even Markers"
+                    description={`Switch between Year-1 annualized bars and the 36-month cumulative curve. The 36-Mo Cash Flow plots color-coded Break-Even markers directly on the chart for Omilia (Teal), Packaged BYOLLM (Amber), and DIY Hyperscaler (Rose) vs. Legacy, calculated using ${results.laborRealizationPct}% Hard P&L Labor Realization.`}
+                    tcoImpact="Shows both Day-1 hard cash savings and exact break-even months without assuming instant Day-1 agent layoffs."
                   />
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {chartView === 'bars'
-                    ? `Omilia flat $${inputs.omiliaOutcomeRate.toFixed(2)}/res vs. metered pass-through token/ASR/TTS & escalation labor`
-                    : `Omilia PS ${formatCurrencyFull(payback.implementationCost)} (${hleeTimelineLabel}) vs. ${comp.setupRangeLabel} (${comp.timeToValueLabel})`}
+                    ? `Omilia flat $${inputs.omiliaOutcomeRate.toFixed(2)}/res vs. metered pass-through fees (${results.laborRealizationPct}% Hard P&L labor capture)`
+                    : `Omilia PS ${formatCurrencyFull(payback.implementationCost)} (${hleeTimelineLabel}) vs. ${comp.setupRangeLabel} · Hard P&L break-even @ ${results.laborRealizationPct}% capture`}
                 </p>
               </div>
               <div className="no-print flex items-center gap-2 shrink-0">
@@ -832,17 +911,18 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               </div>
             ) : (
               (() => {
-                const W = 620;
-                const H = 230;
+                const W = 640;
+                const H = 250;
                 const padL = 62;
-                const padR = 20;
-                const padT = 20;
+                const padR = 22;
+                const padT = 18;
                 const padB = 34;
                 const plotW = W - padL - padR;
                 const plotH = H - padT - padB;
                 const maxCumulative = Math.max(
                   payback.threeYearLegacyTotal,
-                  payback.threeYearDiyTotal,
+                  payback.threeYearByollmTotal,
+                  payback.threeYearDiyHyperscalerTotal,
                   payback.threeYearOmiliaTotal,
                   1
                 );
@@ -854,30 +934,67 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     .map((pt, i) => `${i === 0 ? 'M' : 'L'} ${xOf(pt.month).toFixed(1)} ${yOf(getter(pt)).toFixed(1)}`)
                     .join(' ');
 
-                const beMonths = payback.paybackMonths;
-                const hasVisibleBreakEven = beMonths !== null && beMonths >= 0 && beMonths <= 36;
-                const beCost = hasVisibleBreakEven ? results.legacyMonthlyCost * beMonths : 0;
+                const isByollmSelected = competitorArchetype === 'byollm';
+                const breakEvenMarkers = [
+                  {
+                    key: 'omilia',
+                    label: 'Omilia',
+                    months: payback.paybackMonths,
+                    color: '#0d9488',
+                    pillBg: '#0f766e',
+                    badgeY: padT + 4,
+                  },
+                  {
+                    key: 'byollm',
+                    label: 'BYOLLM',
+                    months: payback.byollmPaybackMonths,
+                    color: '#d97706',
+                    pillBg: '#b45309',
+                    badgeY: padT + 25,
+                  },
+                  {
+                    key: 'diy',
+                    label: 'DIY',
+                    months: payback.diyHyperscalerPaybackMonths,
+                    color: '#e11d48',
+                    pillBg: '#be123c',
+                    badgeY: padT + 46,
+                  },
+                ];
 
                 return (
                   <div className="mt-5 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                      <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                         <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                          <span className="inline-block h-2 w-4 rounded-xs bg-slate-400 dark:bg-slate-500" />
+                          <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-slate-400 dark:border-slate-500" />
                           Legacy ({formatCurrencyCompact(payback.threeYearLegacyTotal)})
                         </span>
-                        <span className="inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
-                          <span className="inline-block h-2 w-4 rounded-xs bg-rose-500" />
-                          {comp.tableHeader} ({formatCurrencyCompact(payback.threeYearDiyTotal)})
+                        <span
+                          className={`inline-flex items-center gap-1.5 ${
+                            isByollmSelected
+                              ? 'font-semibold text-amber-700 dark:text-amber-400'
+                              : 'text-amber-700/80 dark:text-amber-400/80'
+                          }`}
+                        >
+                          <span className="inline-block h-2 w-4 rounded-xs bg-amber-600" />
+                          BYOLLM ({formatCurrencyCompact(payback.threeYearByollmTotal)})
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1.5 ${
+                            !isByollmSelected
+                              ? 'font-semibold text-rose-700 dark:text-rose-400'
+                              : 'text-rose-700/80 dark:text-rose-400/80'
+                          }`}
+                        >
+                          <span className="inline-block h-2 w-4 rounded-xs bg-rose-600" />
+                          DIY Hyperscaler ({formatCurrencyCompact(payback.threeYearDiyHyperscalerTotal)})
                         </span>
                         <span className="inline-flex items-center gap-1.5 font-semibold text-teal-700 dark:text-teal-400">
                           <span className="inline-block h-2 w-4 rounded-xs bg-teal-600" />
                           Omilia OCP ({formatCurrencyCompact(payback.threeYearOmiliaTotal)})
                         </span>
                       </div>
-                      <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
-                        {beMonths !== null ? `Break-Even: ${beMonths.toFixed(1)} mos` : 'Payback: N/A'}
-                      </span>
                     </div>
 
                     <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-950">
@@ -885,7 +1002,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                         viewBox={`0 0 ${W} ${H}`}
                         className="block w-full h-auto select-none"
                         role="img"
-                        aria-label="36-month cumulative spend with Offline Self-Learning cost compression and break-even payback"
+                        aria-label="36-month cumulative spend and color-coded break-even comparison for Legacy, Packaged BYOLLM, DIY Hyperscaler, and Omilia OCP"
                       >
                         {[0, 0.5, 1].map((frac) => {
                           const val = maxCumulative * frac;
@@ -924,6 +1041,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                           </text>
                         ))}
 
+                        {/* Cumulative Cost Curves */}
                         <path
                           d={makePath((p) => p.legacyCumulative)}
                           fill="none"
@@ -932,10 +1050,20 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                           strokeDasharray="4 3"
                         />
                         <path
-                          d={makePath((p) => p.diyCumulative)}
+                          d={makePath((p) => p.byollmCumulative)}
+                          fill="none"
+                          stroke="#d97706"
+                          strokeWidth={isByollmSelected ? '2.4' : '1.7'}
+                          strokeDasharray={isByollmSelected ? undefined : '5 3'}
+                          strokeOpacity={isByollmSelected ? 1 : 0.75}
+                        />
+                        <path
+                          d={makePath((p) => p.diyHyperscalerCumulative)}
                           fill="none"
                           stroke="#e11d48"
-                          strokeWidth="2.2"
+                          strokeWidth={!isByollmSelected ? '2.4' : '1.7'}
+                          strokeDasharray={!isByollmSelected ? undefined : '5 3'}
+                          strokeOpacity={!isByollmSelected ? 1 : 0.75}
                         />
                         <path
                           d={makePath((p) => p.omiliaCumulative)}
@@ -944,27 +1072,102 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                           strokeWidth="2.8"
                         />
 
-                        {hasVisibleBreakEven && (
-                          <g>
-                            <line
-                              x1={xOf(beMonths)}
-                              y1={padT}
-                              x2={xOf(beMonths)}
-                              y2={padT + plotH}
-                              stroke="#0d9488"
-                              strokeWidth="1.2"
-                              strokeDasharray="3 3"
-                            />
-                            <circle
-                              cx={xOf(beMonths)}
-                              cy={yOf(beCost)}
-                              r="4.5"
-                              fill="#0d9488"
-                              className="stroke-white dark:stroke-slate-950"
-                              strokeWidth="2"
-                            />
-                          </g>
-                        )}
+                        {/* Color-Coded Break-Even Markers & Staggered Callout Pills */}
+                        {breakEvenMarkers.map((be) => {
+                          const hasPoint =
+                            be.months !== null && be.months >= 0 && be.months <= 36;
+                          const badgeW = 92;
+                          const badgeH = 16;
+                          const statusText =
+                            be.months === null
+                              ? `${be.label}: N/A`
+                              : be.months > 36
+                              ? `${be.label}: >36m`
+                              : `${be.label}: ${be.months.toFixed(1)}m`;
+
+                          if (!hasPoint || be.months === null) {
+                            const pillX = padL + plotW - badgeW - 4;
+                            return (
+                              <g key={be.key}>
+                                <rect
+                                  x={pillX}
+                                  y={be.badgeY}
+                                  width={badgeW}
+                                  height={badgeH}
+                                  rx="4"
+                                  fill={be.pillBg}
+                                  fillOpacity="0.92"
+                                />
+                                <text
+                                  x={pillX + badgeW / 2}
+                                  y={be.badgeY + 11.2}
+                                  textAnchor="middle"
+                                  fill="#ffffff"
+                                  className="text-[9.5px] font-mono font-bold tabular-nums"
+                                >
+                                  {statusText}
+                                </text>
+                              </g>
+                            );
+                          }
+
+                          const cx = xOf(be.months);
+                          const cy = yOf(results.legacyMonthlyCost * be.months);
+                          const preferredX = cx + 6;
+                          const pillX = Math.max(
+                            padL + 4,
+                            Math.min(padL + plotW - badgeW - 4, preferredX)
+                          );
+
+                          return (
+                            <g key={be.key}>
+                              <line
+                                x1={cx}
+                                y1={be.badgeY + badgeH}
+                                x2={cx}
+                                y2={padT + plotH}
+                                stroke={be.color}
+                                strokeWidth="1.3"
+                                strokeDasharray="3 3"
+                                strokeOpacity="0.8"
+                              />
+                              <line
+                                x1={cx}
+                                y1={be.badgeY + badgeH / 2}
+                                x2={pillX}
+                                y2={be.badgeY + badgeH / 2}
+                                stroke={be.color}
+                                strokeWidth="1.1"
+                                strokeOpacity="0.7"
+                              />
+                              <circle
+                                cx={cx}
+                                cy={cy}
+                                r="4.5"
+                                fill={be.color}
+                                className="stroke-white dark:stroke-slate-950"
+                                strokeWidth="2"
+                              />
+                              <rect
+                                x={pillX}
+                                y={be.badgeY}
+                                width={badgeW}
+                                height={badgeH}
+                                rx="4"
+                                fill={be.pillBg}
+                              />
+                              <text
+                                x={pillX + badgeW / 2}
+                                y={be.badgeY + 11.2}
+                                textAnchor="middle"
+                                fill="#ffffff"
+                                className="text-[9.5px] font-mono font-bold tabular-nums"
+                              >
+                                {statusText}
+                              </text>
+                            </g>
+                          );
+                        })}
                       </svg>
                     </div>
 
@@ -1056,8 +1259,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <strong className="font-mono font-semibold tabular-nums text-teal-800 dark:text-teal-300">
                 {formatCurrencyCompact(results.annualNetSavings)}/yr
               </strong>{' '}
-              in net savings over your Legacy baseline ({Math.round(results.ftesFreed).toLocaleString()} equivalent
-              FTEs freed). Omilia locks in flat{' '}
+              in Hard P&amp;L savings ({results.laborRealizationPct}% labor realization via natural attrition, BPO flex-down, and hiring avoidance—without assuming instant layoffs), plus{' '}
+              <strong className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                {formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr
+              </strong>{' '}
+              in Reclaimed Capacity ({Math.round(results.ftesFreed).toLocaleString()} equivalent FTEs freed). Omilia locks in flat{' '}
               <strong className="font-mono tabular-nums">${inputs.omiliaOutcomeRate.toFixed(2)}/resolved</strong>{' '}
               pricing with zero pass-through token, ASR, or TTS volatility during{' '}
               <strong className="font-mono tabular-nums">{inputs.surge.toFixed(1)}x</strong> volume surges—compressing
@@ -1207,7 +1413,14 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     </tr>
                     <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                       <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                        Residual Human Escalation Cost
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>Residual &amp; Retained Payroll ({results.laborRealizationPct}% P&amp;L Capture)</span>
+                          <InfoTooltip
+                            label="Residual & Retained Payroll"
+                            description={`Reflects active escalation labor PLUS the ${100 - results.laborRealizationPct}% of freed W2 payroll deliberately retained in operations (Reclaimed Capacity) instead of assuming Day-1 layoffs.`}
+                            tcoImpact="Ensures Hard P&L Break-Even and 3-year totals only count cash savings captured through attrition, BPO flex-down, and hiring avoidance."
+                          />
+                        </span>
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
                         {formatCurrencyFull(results.legacyHumanCostMo)}
@@ -1345,6 +1558,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <td className="py-2">
                 TalkGuard: {inputs.talkguard ? `Enabled (-${preset.roi.talkguardSec}s)` : 'Off'} · CoPilot:{' '}
                 {inputs.copilot ? `Enabled (-${preset.roi.copilotSec}s)` : 'Off'}
+              </td>
+            </tr>
+            <tr>
+              <td className="py-2 pr-4 font-medium">Hard P&amp;L Labor Realization</td>
+              <td className="py-2 pr-4 font-mono">
+                {results.laborRealizationPct}% (Non-Layoff Capture)
+              </td>
+              <td className="py-2 pr-4 font-medium">Reclaimed Queue Capacity</td>
+              <td className="py-2 font-mono">
+                {formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr ({Math.round(results.ftesFreed).toLocaleString()} FTEs freed)
               </td>
             </tr>
           </tbody>

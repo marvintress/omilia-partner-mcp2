@@ -858,7 +858,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         },
       ],
       [
-        { text: 'Residual Human Escalation / mo', options: { bold: true } },
+        { text: `Residual & Retained Payroll (${results.laborRealizationPct}% P&L)`, options: { bold: true } },
         { text: formatCurrencyFull(results.legacyHumanCostMo), options: { align: 'right', fontFace: MONO } },
         { text: formatCurrencyFull(results.diyHumanCostMo), options: { align: 'right', fontFace: MONO } },
         { text: formatCurrencyFull(results.omiliaHumanCostMo), options: { align: 'right', fontFace: MONO } },
@@ -923,7 +923,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
     slide.addNotes(
       `SPEAKER NOTES — SLIDE 4:\n` +
         `Walk the CFO through the unit economics table:\n` +
-        `1) Annual net savings vs. Legacy is ${formatCurrencyCompact(results.annualNetSavings)} (${Math.round(results.ftesFreed)} FTEs freed / ${results.daysSavedPerAgentMo.toFixed(1)} days/agent/mo).\n` +
+        `1) Annual Hard P&L net savings vs. Legacy is ${formatCurrencyCompact(results.annualNetSavings)} (${results.laborRealizationPct}% labor realization via attrition, BPO flex-down, and hiring avoidance—no Day-1 layoffs) plus ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr in Reclaimed Queue Capacity (${Math.round(results.ftesFreed)} FTEs freed / ${results.daysSavedPerAgentMo.toFixed(1)} days/agent/mo).\n` +
         `2) Note the distinction in the footnote: ${Math.round(results.targetCont * 100)}% Blended Containment applies across the entire contact center, while Day-1 NLU accuracy (96%+) and in-scope Task Resolution (90%+) measure scoped workflow performance.`
     );
   }
@@ -1129,8 +1129,8 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
 
     slide.addNotes(
       `SPEAKER NOTES — SLIDE 5:\n` +
-        `How 36-Month Break-Even is calculated: Month 0 starts at upfront Phase 1 PS (${formatCurrencyFull(payback.implementationCost)} for Omilia vs. ${formatCurrencyFull(payback.competitorSetupCost)} for ${comp.shortLabel}). Every month thereafter adds monthly run-rate spend.\n` +
-        `Payback occurs at ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} = Implementation Cost ÷ Monthly Net Savings.\n` +
+        `How 36-Month Break-Even is calculated: Month 0 starts at upfront Phase 1 PS (${formatCurrencyFull(payback.implementationCost)} for Omilia vs. ${formatCurrencyFull(payback.competitorSetupCost)} for ${comp.shortLabel}). Every month thereafter adds monthly run-rate spend modeled at ${results.laborRealizationPct}% Hard P&L Labor Realization.\n` +
+        `Payback occurs at ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} using hard cash savings (vs. ${payback.byollmPaybackMonths !== null ? `${payback.byollmPaybackMonths.toFixed(1)}m` : 'N/A'} BYOLLM and ${payback.diyHyperscalerPaybackMonths !== null ? `${payback.diyHyperscalerPaybackMonths.toFixed(1)}m` : 'N/A'} DIY Hyperscaler).\n` +
         `Highlight the sensitivity table to show CFOs downside protection even if containment lands 10% below target.`
     );
   }
@@ -1228,17 +1228,17 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
         },
       ],
       [
-        { text: 'Workforce Capacity & Payback', options: { bold: true, color: C.navy, fill: { color: C.bgLight } } },
+        { text: 'Hard P&L Realization & Auto-Fit FTEs', options: { bold: true, color: C.navy, fill: { color: C.bgLight } } },
         {
-          text: `${Math.round(results.ftesFreed).toLocaleString()} FTEs Freed\n(${results.daysSavedPerAgentMo.toFixed(1)} d/mo)`,
+          text: `${results.laborRealizationPct}% P&L · ${Math.round(results.ftesFreed).toLocaleString()} FTEs\n(${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr cap.)`,
           options: { fontFace: MONO, color: C.tealDark, fill: { color: C.bgLight } },
         },
         {
-          text: 'Maps reclaimed hours against active agent headcount, shift hours, and blended PS implementation cost.',
+          text: 'Separates non-layoff P&L capture (attrition/BPO/surge avoidance) from Reclaimed Capacity, with dynamic agent shift sizing.',
           options: { fill: { color: C.bgLight } },
         },
         {
-          text: 'Translates abstract cost savings into real staffing plans (overtime reduction, attrition absorption, or sales reallocation).',
+          text: 'Eliminates the "we won’t fire all agents Day 1" CFO objection while giving honest color-coded break-even timelines.',
           options: { fill: { color: C.bgLight } },
         },
       ],
@@ -1739,7 +1739,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
     });
 
     slide.addNotes(
-      `SPEAKER NOTES — SLIDE 8:\n` +
+      `SPEAKER NOTES — SLIDE 9:\n` +
         `This slide turns discovery into an executable Statement of Work.\n` +
         `Explain why each scoping selector matters: Switching between OCP SaaS and Bare Metal adds +3 weeks / +12 PS days for air-gapped InfoSec validation; Legacy Mainframe/3270 requires a REST/MCP facade gate so screen-scraping never threatens sub-300ms voice SLAs.`
     );
@@ -1940,7 +1940,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
     );
 
     slide.addNotes(
-      `SPEAKER NOTES — SLIDE 9:\n` +
+      `SPEAKER NOTES — SLIDE 10:\n` +
         `Close the technical architecture discussion with this live MCP Inspector proof.\n` +
         `Explain the key security boundary: OCP acts as the MCP Client inside Omilia's certified perimeter and calls the customer's MCP Server via OAuth 2.0 + mTLS—never routing sensitive audio or PII to third-party frontier model APIs.`
     );

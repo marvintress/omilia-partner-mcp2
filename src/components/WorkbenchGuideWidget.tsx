@@ -91,7 +91,7 @@ const TOUR_STEPS: {
   step: number;
   tab: TabKey;
   title: string;
-    summary: (ctx: {
+  summary: (ctx: {
     preset: VerticalPreset;
     inputs: RoiInputs;
     results: RoiResults;
@@ -99,14 +99,15 @@ const TOUR_STEPS: {
     hlee: HleeResult;
     povConfig: PovConfig;
     povPlan: PovPlanResult;
+    payback: PaybackAnalysis;
   }) => string;
 }[] = [
   {
     step: 1,
     tab: 'economics',
-    title: 'Step 1 of 5 · Unit Economics & TCO Simulator',
-    summary: ({ preset, inputs, results }) =>
-      `Viewing ${preset.name} vs. ${results.competitorProfile.title} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Architecture Baseline: toggle Packaged BYOLLM (Cognigy/Kore/Parloa) vs. DIY Hyperscaler (Azure OpenAI/Bedrock).\n• Volume, Baseline vs. Target Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), and Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/resolved).\n• Toggle Annual TCO Bars vs. 36-Month Cash Flow (showing Offline Self-Learning compression from Yr1 to Yr3) + Sensitivity stress testing.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr net savings and ${formatCurrencyCompact(results.threeYearDiySavings)} 3-year edge vs. ${results.competitorProfile.shortLabel}.`,
+    title: 'Step 1 of 5 · Unit Economics, Hard P&L Realization & Break-Even',
+    summary: ({ preset, inputs, results, payback }) =>
+      `Viewing ${preset.name} vs. ${results.competitorProfile.title} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Baseline: toggle Packaged BYOLLM (Cognigy/Kore/Parloa) vs. DIY Hyperscaler (Azure OpenAI/Bedrock).\n• Volume, Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/res), and Dynamic Auto-Fit FTEs (${inputs.autoFitAgents !== false ? 'Live' : 'Manual'}).\n• Hard P&L Labor Realization (${results.laborRealizationPct}%): separates bankable cash savings (attrition, BPO flex-down, hiring avoidance—zero Day-1 layoffs) from Reclaimed Queue Capacity.\n• 36-Month Cash Flow: plots all-model Color-Coded Break-Even markers (Omilia teal ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'}, BYOLLM amber, DIY rose) + Offline Self-Learning compression & ±10% Sensitivity.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr Hard P&L Savings + ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity.`,
   },
   {
     step: 2,
@@ -181,7 +182,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     {
       id: 'welcome',
       role: 'assistant',
-      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 5 tabs (Unit Economics, AI Radar, POV / POC, Deal Scoping, MCP Inspector), explain what every slider, toggle, and selector tweaks (and why), or generate your Value Prop Deck (.pptx) for ${preset.shortName}.\n\nAsk about any specific control—like "How do we scope a 2-week POV?" or "Explain every control on this tab"—or switch to "Controls & Why" above to browse all settings.`,
+      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 5 tabs (Unit Economics, AI Radar, POV / POC, Deal Scoping, MCP Inspector), explain what every slider, toggle, and selector tweaks (and why), or generate your Value Prop Deck (.pptx) for ${preset.shortName}.\n\nAsk about any specific control—like "How does Hard P&L Realization avoid layoffs?", "Explain color-coded break-even", or "Explain every control on this tab"—or switch to "Controls & Why" above to browse all settings.`,
     },
   ]);
 
@@ -387,26 +388,71 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       id: 'workforce',
       tab: 'economics',
       tabLabel: 'Unit Economics',
-      name: 'Workforce Sizing & Auto-Fit FTEs',
-      currentValue: `${inputs.agents.toLocaleString()} agents · ${inputs.shiftHours}h/d · ${inputs.workDays}d/mo`,
+      name: 'Workforce Sizing & Dynamic Auto-Fit FTEs',
+      currentValue: `${inputs.agents.toLocaleString()} agents (${inputs.autoFitAgents !== false ? 'Live' : 'Manual'}) · ${inputs.shiftHours}h/d · ${inputs.workDays}d/mo`,
       whatItDoes:
-        'Converts total hours reclaimed into Days/Mo per Agent Saved and Equivalent FTEs Freed. "Auto-Fit FTEs" sizes agents to residual uncontained volume.',
+        'Converts total hours reclaimed into Days/Mo per Agent Saved and Equivalent FTEs Freed. With "Auto-Fit: Live" active (default), Active Agents automatically recalculates whenever Call Volume, Base Containment, AHT, ACW, Occupancy, Shift Hrs, or Work Days change; typing a custom headcount switches to Manual mode.',
       whyItMatters:
-        'Turns abstract dollar savings into operational staffing metrics (attrition absorption, overtime reduction, or reallocation to high-value queues).',
-      keywords: ['fte', 'ftes', 'agents', 'auto-fit', 'autofit', 'shift', 'work days', 'capacity'],
+        'Keeps agent relief metrics realistic as you adjust contact center scale live during discovery without needing repeated manual button clicks.',
+      keywords: ['fte', 'ftes', 'agents', 'auto-fit', 'autofit', 'dynamic', 'shift', 'work days', 'capacity'],
+    },
+    {
+      id: 'laborRealization',
+      tab: 'economics',
+      tabLabel: 'Unit Economics',
+      name: 'Hard P&L Labor Realization (%) & Non-Layoff Capacity',
+      currentValue: `${results.laborRealizationPct}% P&L · +${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr cap.`,
+      whatItDoes:
+        'Adjusts what % of freed agent payroll converts into Hard P&L cash savings (25%–100%, with 1-click Conservative 50%, Realistic P&L 65%, and Capacity Value 100% presets) vs. Reclaimed Queue Capacity retained in operations.',
+      whyItMatters:
+        'Eliminates the "we won’t fire agents on Day 1" CFO objection: platform/outcome fees stay 100% cash, while only natural attrition, BPO flex-down, and surge/hiring avoidance drive hard P&L payback—with unharvested hours improving CSAT & abandon rates.',
+      keywords: [
+        'realization',
+        'layoff',
+        'layoffs',
+        'fire',
+        'firing',
+        'attrition',
+        'hard cash',
+        'hard p&l',
+        'p&l',
+        'pnl',
+        'capacity',
+        'reclaimed',
+        'payroll',
+        'bpo',
+        'overtime',
+      ],
+      actionLabel:
+        results.laborRealizationPct === 65 ? 'Test Conservative (50%)' : 'Set Realistic P&L (65%)',
+      onAction: () => {
+        onSelectTab('economics');
+        onUpdateInput('laborRealizationPct', results.laborRealizationPct === 65 ? 50 : 65);
+      },
     },
     {
       id: 'cashflowPayback',
       tab: 'economics',
       tabLabel: 'Unit Economics',
-      name: '36-Month Cash Flow, Payback & Sensitivity Matrix',
-      currentValue:
-        payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} mo payback` : 'N/A',
+      name: '36-Month Cash Flow, Color-Coded Break-Even & Sensitivity Matrix',
+      currentValue: `Omilia ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'} · BYOLLM ${payback.byollmPaybackMonths !== null ? `${payback.byollmPaybackMonths.toFixed(1)}m` : 'N/A'} · DIY ${payback.diyHyperscalerPaybackMonths !== null ? `${payback.diyHyperscalerPaybackMonths.toFixed(1)}m` : 'N/A'}`,
       whatItDoes:
-        'Plots cumulative 36-month spend including upfront Phase 1 PS investment and adds a ±10% Containment Sensitivity view alongside CFO Breakdown.',
+        'Plots cumulative 36-month spend vs. Legacy (dashed) with color-coded Break-Even intersection dots & drop lines directly on the chart for Omilia (Teal), Packaged BYOLLM (Amber), and DIY Hyperscaler (Rose), plus a ±10% Containment Sensitivity view.',
       whyItMatters:
-        'Answers two top CFO objections in one click: exact months to recover Phase 1 implementation spend and downside protection if containment lands 10% below target.',
-      keywords: ['payback', 'cash flow', 'cashflow', 'break-even', 'breakeven', 'sensitivity', '36-month'],
+        'Gives CFOs an immediate visual comparison of how fast Hard P&L savings recover Phase 1 PS vs. slower BYOLLM/DIY builds—while proving positive ROI even at -10% conservative containment.',
+      keywords: [
+        'payback',
+        'cash flow',
+        'cashflow',
+        'break-even',
+        'breakeven',
+        'sensitivity',
+        '36-month',
+        'marker',
+        'markers',
+        'color',
+        'chart',
+      ],
       actionLabel: 'Open Unit Economics',
       onAction: () => onSelectTab('economics'),
     },
@@ -685,7 +731,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       {
         id: `tour-${stepNumber}-${Date.now()}`,
         role: 'assistant',
-        text: `${def.title}\n\n${def.summary({ preset, inputs, results, useCases, hlee, povConfig, povPlan })}`,
+        text: `${def.title}\n\n${def.summary({ preset, inputs, results, useCases, hlee, povConfig, povPlan, payback })}`,
         actions,
       },
     ]);
@@ -754,7 +800,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       setTourStep(1);
       onSelectTab('economics');
       return {
-        text: `${TOUR_STEPS[0].title}\n\n${TOUR_STEPS[0].summary({ preset, inputs, results, useCases, hlee, povConfig, povPlan })}`,
+        text: `${TOUR_STEPS[0].title}\n\n${TOUR_STEPS[0].summary({ preset, inputs, results, useCases, hlee, povConfig, povPlan, payback })}`,
         actions: [
           { label: 'Next: Step 2 (AI Radar)', onClick: () => runTourStep(2) },
           { label: 'Explain Every Unit Economics Control', onClick: () => handleQuickPrompt('Explain every control on economics') },
@@ -827,7 +873,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
 
     // E. Fallback: Helpful guide + quick path to Controls & Why
     return {
-      text: `I can walk you through the 5 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "Why tweak surge?", "How is payback calculated?", "How does POV / POC work?", or "How do Scenarios & CSV work?") or open the Controls & Why reference tab above.`,
+      text: `I can walk you through the 5 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "How does Hard P&L Realization avoid layoffs?", "Explain color-coded break-even", "How does POV / POC work?", or "Why Dynamic Auto-Fit FTEs?") or open the Controls & Why reference tab above.`,
       actions: [
         { label: 'Start 5-Step Tour', onClick: () => runTourStep(1) },
         {
@@ -854,8 +900,8 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
 
   const contextPrompts: Record<TabKey, string[]> = {
     economics: [
-      'Explain Packaged BYOLLM vs. DIY Hyperscaler',
-      'How does Self-Learning compress unit costs?',
+      'How does Hard P&L Realization avoid layoffs?',
+      'Explain color-coded break-even & Dynamic FTEs',
       'Explain every control on economics',
     ],
     radar: [

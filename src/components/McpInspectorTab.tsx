@@ -277,7 +277,9 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
           vertical: preset.name,
           unitEconomicsTcoSummary: {
             competitorBaseline: `${comp.title} (${comp.examples})`,
-            annualNetSavings: formatCurrencyCompact(results.annualNetSavings),
+            annualHardPnlSavings: formatCurrencyCompact(results.annualNetSavings),
+            hardPnlLaborRealizationPct: `${results.laborRealizationPct}%`,
+            reclaimedNonLayoffCapacityValue: `${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr`,
             monthlyNetSavings: formatCurrencyCompact(results.monthlyNetSavings),
             threeYearAdvantageVsCompetitor: formatCurrencyCompact(results.threeYearDiySavings),
             containmentLift: `+${results.containmentLiftPct}%`,
@@ -401,9 +403,16 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
         <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div>
-              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                MCP Client Orchestration &amp; Transport
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  MCP Client Orchestration &amp; Transport
+                </h2>
+                <InfoTooltip
+                  label="MCP Client Orchestration"
+                  description="Demonstrates OCP acting as an outbound MCP Client calling customer-hosted MCP servers inside the sovereign perimeter without sending prompts or PII to external frontier LLMs."
+                  tcoImpact="Eliminates frontier API hops, cutting turn latency below 1,200ms and preserving containment savings."
+                />
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 OCP acts as MCP Client calling customer-hosted MCP servers
               </p>

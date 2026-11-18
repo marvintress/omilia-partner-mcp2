@@ -27,8 +27,10 @@ export interface RoiInputs {
   talkguard: boolean;
   copilot: boolean;
   agents: number;
+  autoFitAgents?: boolean;
   shiftHours: number;
   workDays: number;
+  laborRealizationPct?: number;
 }
 
 export interface RoiResults {
@@ -42,6 +44,8 @@ export interface RoiResults {
   legacyMonthlyCost: number;
   omiliaMonthlyCost: number;
   diyMonthlyCost: number;
+  byollmMonthlyCost: number;
+  diyHyperscalerMonthlyCost: number;
   legacyPlatformSpendMo: number;
   diyPlatformSpendMo: number;
   omiliaPlatformSpendMo: number;
@@ -63,6 +67,8 @@ export interface RoiResults {
   totalHandleSec: number;
   tgSecSaved: number;
   cpSecSaved: number;
+  laborRealizationPct: number;
+  annualCapacityReinvestedValue: number;
 }
 
 export function formatCurrencyCompact(val: number): string {
@@ -112,6 +118,9 @@ export function calculateUnitEconomics(
   const targetCont = Math.max(baseCont + 0.05, inputs.targetContainment / 100);
   const effectiveMonthlyCalls = inputs.callVolume * inputs.surge;
 
+  const laborRealizationPct = Math.max(25, Math.min(100, inputs.laborRealizationPct ?? 65));
+  const realizationFactor = laborRealizationPct / 100;
+
   // 1. Legacy Baseline
   const legacyHumanCalls = effectiveMonthlyCalls * (1 - baseCont);
   const legacyIvrCalls = effectiveMonthlyCalls * baseCont;
@@ -128,19 +137,49 @@ export function calculateUnitEconomics(
   const assistedTimeRatio = Math.max(0.55, (totalHandleSec - tgSecSaved - cpSecSaved) / totalHandleSec);
   const omiliaEscalatedUnitCost = unitHumanCost * assistedTimeRatio;
   const omiliaPlatformSpendMo = omiliaAutomatedCalls * inputs.omiliaOutcomeRate + 6500;
-  const omiliaHumanCostMo = omiliaEscalatedCalls * omiliaEscalatedUnitCost;
+  const omiliaRawHumanCostMo = omiliaEscalatedCalls * omiliaEscalatedUnitCost;
+  const omiliaHumanCostMo =
+    legacyHumanCostMo >= omiliaRawHumanCostMo
+      ? legacyHumanCostMo - realizationFactor * (legacyHumanCostMo - omiliaRawHumanCostMo)
+      : omiliaRawHumanCostMo;
   const omiliaMonthlyCost = omiliaPlatformSpendMo + omiliaHumanCostMo;
+  const annualCapacityReinvestedValue =
+    Math.max(0, (1 - realizationFactor) * (legacyHumanCostMo - omiliaRawHumanCostMo)) * 12;
 
   // 3. Competitor Baseline (Packaged BYOLLM or DIY Hyperscaler)
-  const diyContainment = Math.max(baseCont + 0.08, targetCont - competitorProfile.containmentLag);
-  const diyAutomatedCalls = effectiveMonthlyCalls * diyContainment;
-  const diyEscalatedCalls = effectiveMonthlyCalls * (1 - diyContainment);
-  const nonlinearSurgePenalty = Math.pow(inputs.surge, competitorProfile.surgeExponent);
-  const diyPerCallVariableRate = competitorProfile.baseVariableRate * nonlinearSurgePenalty;
-  const diyPlatformSpendMo =
-    diyAutomatedCalls * diyPerCallVariableRate + competitorProfile.monthlyLicenseOrTaxBase;
-  const diyHumanCostMo = diyEscalatedCalls * unitHumanCost;
-  const diyMonthlyCost = diyPlatformSpendMo + diyHumanCostMo;
+  const computeCompetitorRunRate = (profile: CompetitorProfile) => {
+    const cCont = Math.max(baseCont + 0.08, targetCont - profile.containmentLag);
+    const cAuto = effectiveMonthlyCalls * cCont;
+    const cEsc = effectiveMonthlyCalls * (1 - cCont);
+    const cSurgePenalty = Math.pow(inputs.surge, profile.surgeExponent);
+    const cVarRate = profile.baseVariableRate * cSurgePenalty;
+    const cPlatformMo = cAuto * cVarRate + profile.monthlyLicenseOrTaxBase;
+    const rawHumanMo = cEsc * unitHumanCost;
+    const cHumanMo =
+      legacyHumanCostMo >= rawHumanMo
+        ? legacyHumanCostMo - realizationFactor * (legacyHumanCostMo - rawHumanMo)
+        : rawHumanMo;
+    return {
+      cCont,
+      cAuto,
+      cVarRate,
+      cPlatformMo,
+      cHumanMo,
+      cMonthly: cPlatformMo + cHumanMo,
+    };
+  };
+
+  const activeCompRun = computeCompetitorRunRate(competitorProfile);
+  const byollmMonthlyCost = computeCompetitorRunRate(COMPETITOR_PROFILES.byollm).cMonthly;
+  const diyHyperscalerMonthlyCost = computeCompetitorRunRate(
+    COMPETITOR_PROFILES.diy_hyperscaler
+  ).cMonthly;
+
+  const diyContainment = activeCompRun.cCont;
+  const diyPerCallVariableRate = activeCompRun.cVarRate;
+  const diyPlatformSpendMo = activeCompRun.cPlatformMo;
+  const diyHumanCostMo = activeCompRun.cHumanMo;
+  const diyMonthlyCost = activeCompRun.cMonthly;
 
   // Net Savings & Capacity Metrics
   const monthlyNetSavings = Math.max(0, legacyMonthlyCost - omiliaMonthlyCost);
@@ -153,26 +192,35 @@ export function calculateUnitEconomics(
   const assistHoursMo = (omiliaEscalatedCalls * (tgSecSaved + cpSecSaved)) / 3600;
   const totalHoursSavedMo = deflectionHoursMo + assistHoursMo;
 
-  const agents = Math.max(1, inputs.agents || 500);
+  const agents =
+    inputs.autoFitAgents !== false ? computeFittedAgents(inputs) : Math.max(1, inputs.agents || 500);
   const shiftHours = Math.max(1, inputs.shiftHours || 8);
+  const workDays = Math.max(1, inputs.workDays || 21.5);
   const daysSavedPerAgentMo = totalHoursSavedMo / agents / shiftHours;
-  const ftesFreed = totalHoursSavedMo / (shiftHours * 21.5);
+  const ftesFreed = totalHoursSavedMo / (shiftHours * workDays);
 
   // Max 4.0x surge scale for stable visual bar proportionality
   const maxSurge = 4.0;
   const maxSurgeCalls = inputs.callVolume * maxSurge;
-  const maxAnnualLegacy =
-    (maxSurgeCalls * (1 - baseCont) * unitHumanCost + maxSurgeCalls * baseCont * 0.14) * 12;
+  const maxLegacyHumanCost = maxSurgeCalls * (1 - baseCont) * unitHumanCost;
+  const maxAnnualLegacy = (maxLegacyHumanCost + maxSurgeCalls * baseCont * 0.14) * 12;
+  const maxOmiliaRawHuman = maxSurgeCalls * (1 - targetCont) * omiliaEscalatedUnitCost;
+  const maxOmiliaHuman =
+    maxLegacyHumanCost >= maxOmiliaRawHuman
+      ? maxLegacyHumanCost - realizationFactor * (maxLegacyHumanCost - maxOmiliaRawHuman)
+      : maxOmiliaRawHuman;
   const maxAnnualOmilia =
-    (maxSurgeCalls * targetCont * inputs.omiliaOutcomeRate +
-      maxSurgeCalls * (1 - targetCont) * omiliaEscalatedUnitCost +
-      6500) *
-    12;
+    (maxSurgeCalls * targetCont * inputs.omiliaOutcomeRate + maxOmiliaHuman + 6500) * 12;
+  const maxDiyRawHuman = maxSurgeCalls * (1 - diyContainment) * unitHumanCost;
+  const maxDiyHuman =
+    maxLegacyHumanCost >= maxDiyRawHuman
+      ? maxLegacyHumanCost - realizationFactor * (maxLegacyHumanCost - maxDiyRawHuman)
+      : maxDiyRawHuman;
   const maxAnnualDiy =
     (maxSurgeCalls *
       diyContainment *
       (competitorProfile.baseVariableRate * Math.pow(maxSurge, competitorProfile.surgeExponent)) +
-      maxSurgeCalls * (1 - diyContainment) * unitHumanCost +
+      maxDiyHuman +
       competitorProfile.monthlyLicenseOrTaxBase) *
     12;
 
@@ -189,6 +237,8 @@ export function calculateUnitEconomics(
     legacyMonthlyCost,
     omiliaMonthlyCost,
     diyMonthlyCost,
+    byollmMonthlyCost,
+    diyHyperscalerMonthlyCost,
     legacyPlatformSpendMo,
     diyPlatformSpendMo,
     omiliaPlatformSpendMo,
@@ -210,6 +260,8 @@ export function calculateUnitEconomics(
     totalHandleSec,
     tgSecSaved,
     cpSecSaved,
+    laborRealizationPct,
+    annualCapacityReinvestedValue,
   };
 }
 
@@ -341,17 +393,25 @@ export interface CashFlowPoint {
   month: number;
   legacyCumulative: number;
   diyCumulative: number;
+  byollmCumulative: number;
+  diyHyperscalerCumulative: number;
   omiliaCumulative: number;
 }
 
 export interface PaybackAnalysis {
   implementationCost: number;
   competitorSetupCost: number;
+  byollmSetupCost: number;
+  diyHyperscalerSetupCost: number;
   paybackMonths: number | null;
+  byollmPaybackMonths: number | null;
+  diyHyperscalerPaybackMonths: number | null;
   points: CashFlowPoint[];
   threeYearOmiliaTotal: number;
   threeYearLegacyTotal: number;
   threeYearDiyTotal: number;
+  threeYearByollmTotal: number;
+  threeYearDiyHyperscalerTotal: number;
   threeYearCompetitorSavings: number;
   omiliaUnitRatesByYear: {
     yr1: number;
@@ -365,6 +425,44 @@ function computeOmiliaCumulativeAtMonth(month: number, monthlyCostYr1: number, s
   const m2 = Math.max(0, Math.min(month, 24) - 12);
   const m3 = Math.max(0, Math.min(month, 36) - 24);
   return setupCost + m1 * monthlyCostYr1 * 1.0 + m2 * monthlyCostYr1 * 0.9 + m3 * monthlyCostYr1 * 0.82;
+}
+
+function computeOmiliaBreakEvenMonths(
+  setupCost: number,
+  omiliaMonthlyYr1: number,
+  legacyMonthlyCost: number
+): number | null {
+  if (setupCost <= 0) return 0;
+  // Year 1 (0..12): factor 1.0
+  const gap0 = setupCost;
+  const c1 = omiliaMonthlyYr1 * 1.0;
+  const gap12 = gap0 + 12 * (c1 - legacyMonthlyCost);
+  if (gap12 <= 0 && legacyMonthlyCost > c1) {
+    return gap0 / (legacyMonthlyCost - c1);
+  }
+  // Year 2 (12..24): factor 0.90
+  const c2 = omiliaMonthlyYr1 * 0.9;
+  const gap24 = gap12 + 12 * (c2 - legacyMonthlyCost);
+  if (gap24 <= 0 && legacyMonthlyCost > c2) {
+    return 12 + gap12 / (legacyMonthlyCost - c2);
+  }
+  // Year 3 (24..36): factor 0.82
+  const c3 = omiliaMonthlyYr1 * 0.82;
+  if (legacyMonthlyCost > c3) {
+    return 24 + gap24 / (legacyMonthlyCost - c3);
+  }
+  return null;
+}
+
+function computeLinearBreakEvenMonths(
+  setupCost: number,
+  monthlyCost: number,
+  legacyMonthlyCost: number
+): number | null {
+  if (setupCost <= 0) return 0;
+  const netMonthlySavings = legacyMonthlyCost - monthlyCost;
+  if (netMonthlySavings <= 0) return null;
+  return setupCost / netMonthlySavings;
 }
 
 export function computeCompetitorSetupCost(
@@ -387,9 +485,26 @@ export function computePaybackAndCashFlow(
   baseOutcomeRate = 0.4
 ): PaybackAnalysis {
   const implementationCost = Math.max(0, psDays * psDayRate);
-  const competitorSetupCost = computeCompetitorSetupCost(results.competitorProfile.key, psDays);
-  const paybackMonths =
-    results.monthlyNetSavings > 0 ? implementationCost / results.monthlyNetSavings : null;
+  const byollmSetupCost = computeCompetitorSetupCost('byollm', psDays);
+  const diyHyperscalerSetupCost = computeCompetitorSetupCost('diy_hyperscaler', psDays);
+  const competitorSetupCost =
+    results.competitorProfile.key === 'byollm' ? byollmSetupCost : diyHyperscalerSetupCost;
+
+  const paybackMonths = computeOmiliaBreakEvenMonths(
+    implementationCost,
+    results.omiliaMonthlyCost,
+    results.legacyMonthlyCost
+  );
+  const byollmPaybackMonths = computeLinearBreakEvenMonths(
+    byollmSetupCost,
+    results.byollmMonthlyCost,
+    results.legacyMonthlyCost
+  );
+  const diyHyperscalerPaybackMonths = computeLinearBreakEvenMonths(
+    diyHyperscalerSetupCost,
+    results.diyHyperscalerMonthlyCost,
+    results.legacyMonthlyCost
+  );
 
   const points: CashFlowPoint[] = [];
   for (let month = 0; month <= 36; month += 3) {
@@ -397,6 +512,9 @@ export function computePaybackAndCashFlow(
       month,
       legacyCumulative: results.legacyMonthlyCost * month,
       diyCumulative: competitorSetupCost + results.diyMonthlyCost * month,
+      byollmCumulative: byollmSetupCost + results.byollmMonthlyCost * month,
+      diyHyperscalerCumulative:
+        diyHyperscalerSetupCost + results.diyHyperscalerMonthlyCost * month,
       omiliaCumulative: computeOmiliaCumulativeAtMonth(
         month,
         results.omiliaMonthlyCost,
@@ -407,6 +525,9 @@ export function computePaybackAndCashFlow(
 
   const threeYearLegacyTotal = results.legacyMonthlyCost * 36;
   const threeYearDiyTotal = competitorSetupCost + results.diyMonthlyCost * 36;
+  const threeYearByollmTotal = byollmSetupCost + results.byollmMonthlyCost * 36;
+  const threeYearDiyHyperscalerTotal =
+    diyHyperscalerSetupCost + results.diyHyperscalerMonthlyCost * 36;
   const threeYearOmiliaTotal = computeOmiliaCumulativeAtMonth(
     36,
     results.omiliaMonthlyCost,
@@ -416,10 +537,16 @@ export function computePaybackAndCashFlow(
   return {
     implementationCost,
     competitorSetupCost,
+    byollmSetupCost,
+    diyHyperscalerSetupCost,
     paybackMonths,
+    byollmPaybackMonths,
+    diyHyperscalerPaybackMonths,
     points,
     threeYearLegacyTotal,
     threeYearDiyTotal,
+    threeYearByollmTotal,
+    threeYearDiyHyperscalerTotal,
     threeYearOmiliaTotal,
     threeYearCompetitorSavings: Math.max(0, threeYearDiyTotal - threeYearOmiliaTotal),
     omiliaUnitRatesByYear: {
@@ -805,10 +932,11 @@ export function buildExecutiveDealBrief(params: {
     `================================================================`,
     ...(metaLines.length > 0 ? [metaLines.join(' | '), ``] : []),
     `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`,
-    `Annual Net Savings vs. Legacy: ${formatCurrencyCompact(results.annualNetSavings)} (${formatCurrencyCompact(results.monthlyNetSavings)}/mo)`,
+    `Annual Hard P&L Savings vs. Legacy (${results.laborRealizationPct}% Labor Capture): ${formatCurrencyCompact(results.annualNetSavings)} (${formatCurrencyCompact(results.monthlyNetSavings)}/mo)`,
+    `Reclaimed Non-Layoff Capacity Value: ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr (${Math.round(results.ftesFreed).toLocaleString()} FTEs freed via attrition/BPO/surge avoidance)`,
     `3-Year TCO Advantage vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)} (incl. Self-Learning Compression)`,
     `Phase 1 Implementation Cost (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/day): ${formatCurrencyFull(payback.implementationCost)} vs. ${comp.setupRangeLabel}`,
-    `Break-Even Payback Period: ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'}`,
+    `Break-Even Payback Period (Hard P&L): ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'}`,
     `Containment Lift: +${results.containmentLiftPct}% (${Math.round(results.omiliaAutomatedCalls).toLocaleString()} calls automated/mo)`,
     `Agent Capacity Reclaimed: ${results.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(results.ftesFreed).toLocaleString()} FTEs freed)`,
     `Omilia Outcome Pricing: $${inputs.omiliaOutcomeRate.toFixed(2)}/resolved (Yr1) → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/resolved (Yr3 Self-Learning) | Human Cost: $${results.unitHumanCost.toFixed(2)}/call`,
@@ -879,7 +1007,9 @@ export function buildDealCsv(params: {
     ['Target Omilia Containment', `${Math.round(results.targetCont * 100)}%`],
     ['Omilia Outcome Rate Yr1 / Yr2 / Yr3 (USD)', `$${payback.omiliaUnitRatesByYear.yr1.toFixed(2)} / $${payback.omiliaUnitRatesByYear.yr2.toFixed(2)} / $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}`],
     ['Loaded Human Cost per Call (USD)', results.unitHumanCost.toFixed(2)],
-    ['Annual Net Savings vs Legacy (USD)', Math.round(results.annualNetSavings).toString()],
+    ['Hard P&L Labor Realization (%)', `${results.laborRealizationPct}%`],
+    ['Annual Hard P&L Net Savings vs Legacy (USD)', Math.round(results.annualNetSavings).toString()],
+    ['Reclaimed Non-Layoff Capacity Value (USD/yr)', Math.round(results.annualCapacityReinvestedValue).toString()],
     [`3-Year TCO Advantage vs ${comp.shortLabel} (USD)`, Math.round(payback.threeYearCompetitorSavings).toString()],
     ['Phase 1 PS Effort', `${hlee.psDays} days @ $${psDayRate}/day`],
     ['Phase 1 Implementation Cost (USD)', Math.round(payback.implementationCost).toString()],
