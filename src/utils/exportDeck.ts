@@ -1129,7 +1129,7 @@ export async function downloadValuePropDeck(params: ExportDeckParams): Promise<s
 
     slide.addNotes(
       `SPEAKER NOTES — SLIDE 5:\n` +
-        `How 36-Month Break-Even is calculated: Month 0 starts at upfront Phase 1 PS (${formatCurrencyFull(payback.implementationCost)} for Omilia vs. ${formatCurrencyFull(payback.competitorSetupCost)} for ${comp.shortLabel}). Every month thereafter adds monthly run-rate spend modeled at ${results.laborRealizationPct}% Hard P&L Labor Realization.\n` +
+        `How 36-Month Break-Even is calculated: Month 0 starts at upfront Phase 1 PS (${formatCurrencyFull(payback.implementationCost)} for Omilia vs. ${formatCurrencyFull(payback.competitorSetupCost)} for ${comp.shortLabel}). Each trajectory preserves full Legacy burn during its build window (${payback.omiliaBuildMonths.toFixed(1)}m Omilia HLEE vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY), followed by a 2-month phased traffic ramp (25% -> 60% -> 100%) modeled at ${results.laborRealizationPct}% Hard P&L Labor Realization. Years 2–3 Offline Self-Learning (-10% / -18%) compresses Omilia's variable outcome fees strictly (never retained payroll).\n` +
         `Payback occurs at ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} using hard cash savings (vs. ${payback.byollmPaybackMonths !== null ? `${payback.byollmPaybackMonths.toFixed(1)}m` : 'N/A'} BYOLLM and ${payback.diyHyperscalerPaybackMonths !== null ? `${payback.diyHyperscalerPaybackMonths.toFixed(1)}m` : 'N/A'} DIY Hyperscaler).\n` +
         `Highlight the sensitivity table to show CFOs downside protection even if containment lands 10% below target.`
     );

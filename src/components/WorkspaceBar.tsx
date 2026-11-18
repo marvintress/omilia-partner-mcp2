@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, Moon, Presentation, Printer, Sun } from 'lucide-react';
+import { Bookmark, FileSpreadsheet, Moon, Presentation, Printer, Sun } from 'lucide-react';
 import { VERTICAL_PRESETS, VerticalKey, VerticalPreset } from '../data/verticalPresets';
 import { InfoTooltip } from './InfoTooltip';
 
@@ -11,6 +11,7 @@ interface WorkspaceBarProps {
   onToggleTheme: () => void;
   onPrint: () => void;
   onOpenScenarios: () => void;
+  onOpenCustomerSheet: () => void;
   onDownloadDeck: () => void;
   isExportingDeck: boolean;
   savedCount: number;
@@ -26,6 +27,7 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
   onToggleTheme,
   onPrint,
   onOpenScenarios,
+  onOpenCustomerSheet,
   onDownloadDeck,
   isExportingDeck,
   savedCount,
@@ -86,7 +88,7 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
             placement="bottom"
           />
 
-          <div className="hidden xl:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
+          <div className="hidden 2xl:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
             <span>{preset.compliance.slice(0, 3).join(' · ')}</span>
             <span aria-hidden="true">·</span>
             <span>Zero Frontier Egress</span>
@@ -95,15 +97,25 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
           </div>
         </div>
 
-        {/* Right: Scenarios, Deck, Print & Theme Toggle */}
+        {/* Right: Customer Sheet, Scenarios, Deck, Print & Theme Toggle */}
         <div className="flex items-center gap-2 shrink-0">
           <InfoTooltip
-            label="Scenarios, PowerPoint Deck & PDF"
-            description="Save local deal snapshots or copy shareable ?s= URLs, download an editable 10-slide Value Prop PowerPoint (.pptx) configured with your numbers, or print any tab as an executive PDF."
-            tcoImpact="Lets partners configure once in discovery and immediately walk out with CFO, Radar, and POV deliverables."
+            label="Customer Intake Sheet, Scenarios, Deck & PDF"
+            description="Download a customer-ready .xlsx/.csv discovery questionnaire to collect client numbers and upload it back to auto-configure the tool, save browser scenarios or ?s= URLs, build a 10-slide .pptx deck, or print PDF."
+            tcoImpact="Eliminates manual re-keying after customer discovery workshops—send the sheet out and upload completed inputs in one click."
             placement="bottom"
             align="right"
           />
+
+          <button
+            type="button"
+            onClick={onOpenCustomerSheet}
+            title="Download a customer-ready discovery spreadsheet (.xlsx/.csv) or upload a completed sheet to auto-configure the workbench"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-teal-700 dark:text-teal-400" aria-hidden="true" />
+            Customer Sheet
+          </button>
 
           <button
             type="button"

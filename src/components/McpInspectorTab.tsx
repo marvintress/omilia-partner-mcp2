@@ -13,6 +13,7 @@ import {
   getQuadrantMeta,
   HleeResult,
   isHighFeasibilityQuadrant,
+  PaybackAnalysis,
   RoiInputs,
   RoiResults,
 } from '../utils/calculations';
@@ -22,6 +23,7 @@ interface McpInspectorTabProps {
   preset: VerticalPreset;
   inputs: RoiInputs;
   results: RoiResults;
+  payback: PaybackAnalysis;
   useCases: UseCase[];
   partnerMotion: PartnerMotion;
   sovereignty: SovereigntyTier;
@@ -37,6 +39,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
   preset,
   inputs,
   results,
+  payback,
   useCases,
   partnerMotion,
   sovereignty,
@@ -281,7 +284,11 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
             hardPnlLaborRealizationPct: `${results.laborRealizationPct}%`,
             reclaimedNonLayoffCapacityValue: `${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr`,
             monthlyNetSavings: formatCurrencyCompact(results.monthlyNetSavings),
-            threeYearAdvantageVsCompetitor: formatCurrencyCompact(results.threeYearDiySavings),
+            threeYearAdvantageVsCompetitor: formatCurrencyCompact(payback.threeYearCompetitorSavings),
+            breakEvenPaybackMonths:
+              payback.paybackMonths !== null
+                ? `${payback.paybackMonths.toFixed(1)} months (incl. ${payback.omiliaBuildMonths.toFixed(1)}m build + 2m ramp)`
+                : 'N/A',
             containmentLift: `+${results.containmentLiftPct}%`,
             resolvedCallsPerMonth: `${Math.round(results.omiliaAutomatedCalls).toLocaleString()} calls/mo`,
             agentDaysSavedPerMonth: `${results.daysSavedPerAgentMo.toFixed(1)} days`,

@@ -403,10 +403,14 @@ export interface PaybackAnalysis {
   competitorSetupCost: number;
   byollmSetupCost: number;
   diyHyperscalerSetupCost: number;
+  omiliaBuildMonths: number;
+  byollmBuildMonths: number;
+  diyBuildMonths: number;
   paybackMonths: number | null;
   byollmPaybackMonths: number | null;
   diyHyperscalerPaybackMonths: number | null;
   points: CashFlowPoint[];
+  monthlyPoints: CashFlowPoint[];
   threeYearOmiliaTotal: number;
   threeYearLegacyTotal: number;
   threeYearDiyTotal: number;
@@ -420,49 +424,67 @@ export interface PaybackAnalysis {
   };
 }
 
-function computeOmiliaCumulativeAtMonth(month: number, monthlyCostYr1: number, setupCost: number): number {
-  const m1 = Math.min(month, 12);
-  const m2 = Math.max(0, Math.min(month, 24) - 12);
-  const m3 = Math.max(0, Math.min(month, 36) - 24);
-  return setupCost + m1 * monthlyCostYr1 * 1.0 + m2 * monthlyCostYr1 * 0.9 + m3 * monthlyCostYr1 * 0.82;
+function getRampShareAtTime(tMid: number, buildMonths: number): number {
+  if (tMid < buildMonths) return 0;
+  const elapsed = tMid - buildMonths;
+  if (elapsed < 1) return 0.25;
+  if (elapsed < 2) return 0.6;
+  return 1.0;
 }
 
-function computeOmiliaBreakEvenMonths(
-  setupCost: number,
-  omiliaMonthlyYr1: number,
-  legacyMonthlyCost: number
-): number | null {
-  if (setupCost <= 0) return 0;
-  // Year 1 (0..12): factor 1.0
-  const gap0 = setupCost;
-  const c1 = omiliaMonthlyYr1 * 1.0;
-  const gap12 = gap0 + 12 * (c1 - legacyMonthlyCost);
-  if (gap12 <= 0 && legacyMonthlyCost > c1) {
-    return gap0 / (legacyMonthlyCost - c1);
-  }
-  // Year 2 (12..24): factor 0.90
-  const c2 = omiliaMonthlyYr1 * 0.9;
-  const gap24 = gap12 + 12 * (c2 - legacyMonthlyCost);
-  if (gap24 <= 0 && legacyMonthlyCost > c2) {
-    return 12 + gap12 / (legacyMonthlyCost - c2);
-  }
-  // Year 3 (24..36): factor 0.82
-  const c3 = omiliaMonthlyYr1 * 0.82;
-  if (legacyMonthlyCost > c3) {
-    return 24 + gap24 / (legacyMonthlyCost - c3);
-  }
-  return null;
-}
+function solveRampModelTrajectory(params: {
+  setupCost: number;
+  buildMonths: number;
+  legacyMonthlyCost: number;
+  getSteadyMonthlyCostAtTime: (tMid: number) => number;
+}): {
+  atMonth: (month: number) => number;
+  breakEvenMonths: number | null;
+} {
+  const { setupCost, buildMonths, legacyMonthlyCost, getSteadyMonthlyCostAtTime } = params;
+  const B = Math.max(0, Math.min(35.5, buildMonths));
+  const rawBreaks = [0, B, B + 1, B + 2, 12, 24, 36].filter((x) => x >= 0 && x <= 36);
+  const breaks = Array.from(new Set(rawBreaks.map((x) => Number(x.toFixed(6))))).sort((a, b) => a - b);
 
-function computeLinearBreakEvenMonths(
-  setupCost: number,
-  monthlyCost: number,
-  legacyMonthlyCost: number
-): number | null {
-  if (setupCost <= 0) return 0;
-  const netMonthlySavings = legacyMonthlyCost - monthlyCost;
-  if (netMonthlySavings <= 0) return null;
-  return setupCost / netMonthlySavings;
+  const atMonth = (targetMonth: number): number => {
+    const M = Math.max(0, Math.min(36, targetMonth));
+    let total = setupCost;
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const t0 = breaks[i];
+      const t1 = Math.min(breaks[i + 1], M);
+      if (t1 <= t0) continue;
+      const tMid = (t0 + t1) / 2;
+      const alpha = getRampShareAtTime(tMid, B);
+      const steadyAiCost = getSteadyMonthlyCostAtTime(tMid);
+      const rate = legacyMonthlyCost + alpha * (steadyAiCost - legacyMonthlyCost);
+      total += (t1 - t0) * rate;
+    }
+    return total;
+  };
+
+  let breakEvenMonths: number | null = null;
+  if (setupCost <= 0) {
+    breakEvenMonths = 0;
+  } else {
+    let deficit = setupCost;
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const t0 = breaks[i];
+      const t1 = breaks[i + 1];
+      if (t1 <= t0) continue;
+      const tMid = (t0 + t1) / 2;
+      const alpha = getRampShareAtTime(tMid, B);
+      const steadyAiCost = getSteadyMonthlyCostAtTime(tMid);
+      const monthlySavings = alpha * (legacyMonthlyCost - steadyAiCost);
+      const endDeficit = deficit - monthlySavings * (t1 - t0);
+      if (monthlySavings > 0 && endDeficit <= 0) {
+        breakEvenMonths = t0 + deficit / monthlySavings;
+        break;
+      }
+      deficit = endDeficit;
+    }
+  }
+
+  return { atMonth, breakEvenMonths };
 }
 
 export function computeCompetitorSetupCost(
@@ -482,7 +504,8 @@ export function computePaybackAndCashFlow(
   results: RoiResults,
   psDays: number,
   psDayRate: number,
-  baseOutcomeRate = 0.4
+  baseOutcomeRate = 0.4,
+  hleeWeeks = 6
 ): PaybackAnalysis {
   const implementationCost = Math.max(0, psDays * psDayRate);
   const byollmSetupCost = computeCompetitorSetupCost('byollm', psDays);
@@ -490,59 +513,84 @@ export function computePaybackAndCashFlow(
   const competitorSetupCost =
     results.competitorProfile.key === 'byollm' ? byollmSetupCost : diyHyperscalerSetupCost;
 
-  const paybackMonths = computeOmiliaBreakEvenMonths(
-    implementationCost,
-    results.omiliaMonthlyCost,
-    results.legacyMonthlyCost
-  );
-  const byollmPaybackMonths = computeLinearBreakEvenMonths(
-    byollmSetupCost,
-    results.byollmMonthlyCost,
-    results.legacyMonthlyCost
-  );
-  const diyHyperscalerPaybackMonths = computeLinearBreakEvenMonths(
-    diyHyperscalerSetupCost,
-    results.diyHyperscalerMonthlyCost,
-    results.legacyMonthlyCost
-  );
+  // Build delays tied directly to HLEE Weeks & Competitor Time-to-Value before post-launch ramp
+  const omiliaBuildMonths =
+    hleeWeeks > 0 ? Math.max(0.75, Number((hleeWeeks / 4.33).toFixed(2))) : 0;
+  const byollmBuildMonths = 3.25; // 12–16 weeks multi-vendor orchestrator build
+  const diyBuildMonths = 7.5; // 6–9 months custom engineering build
+
+  // Year 2 (-10%) & Year 3 (-18%) Self-Learning applies strictly to Omilia's variable outcome fees
+  const outcomeVariableYr1 = Math.max(0, results.omiliaPlatformSpendMo - 6500);
+  const omiliaMonthlyCostYr1 = results.omiliaMonthlyCost;
+  const omiliaMonthlyCostYr2 = outcomeVariableYr1 * 0.9 + 6500 + results.omiliaHumanCostMo;
+  const omiliaMonthlyCostYr3 = outcomeVariableYr1 * 0.82 + 6500 + results.omiliaHumanCostMo;
+
+  const omiliaTraj = solveRampModelTrajectory({
+    setupCost: implementationCost,
+    buildMonths: omiliaBuildMonths,
+    legacyMonthlyCost: results.legacyMonthlyCost,
+    getSteadyMonthlyCostAtTime: (tMid) =>
+      tMid < 12 ? omiliaMonthlyCostYr1 : tMid < 24 ? omiliaMonthlyCostYr2 : omiliaMonthlyCostYr3,
+  });
+
+  const byollmTraj = solveRampModelTrajectory({
+    setupCost: byollmSetupCost,
+    buildMonths: byollmBuildMonths,
+    legacyMonthlyCost: results.legacyMonthlyCost,
+    getSteadyMonthlyCostAtTime: () => results.byollmMonthlyCost,
+  });
+
+  const diyTraj = solveRampModelTrajectory({
+    setupCost: diyHyperscalerSetupCost,
+    buildMonths: diyBuildMonths,
+    legacyMonthlyCost: results.legacyMonthlyCost,
+    getSteadyMonthlyCostAtTime: () => results.diyHyperscalerMonthlyCost,
+  });
+
+  const activeIsByollm = results.competitorProfile.key === 'byollm';
+
+  const makePointAt = (month: number): CashFlowPoint => {
+    const byollmCum = byollmTraj.atMonth(month);
+    const diyHypCum = diyTraj.atMonth(month);
+    return {
+      month,
+      legacyCumulative: results.legacyMonthlyCost * month,
+      diyCumulative: activeIsByollm ? byollmCum : diyHypCum,
+      byollmCumulative: byollmCum,
+      diyHyperscalerCumulative: diyHypCum,
+      omiliaCumulative: omiliaTraj.atMonth(month),
+    };
+  };
 
   const points: CashFlowPoint[] = [];
   for (let month = 0; month <= 36; month += 3) {
-    points.push({
-      month,
-      legacyCumulative: results.legacyMonthlyCost * month,
-      diyCumulative: competitorSetupCost + results.diyMonthlyCost * month,
-      byollmCumulative: byollmSetupCost + results.byollmMonthlyCost * month,
-      diyHyperscalerCumulative:
-        diyHyperscalerSetupCost + results.diyHyperscalerMonthlyCost * month,
-      omiliaCumulative: computeOmiliaCumulativeAtMonth(
-        month,
-        results.omiliaMonthlyCost,
-        implementationCost
-      ),
-    });
+    points.push(makePointAt(month));
+  }
+
+  const monthlyPoints: CashFlowPoint[] = [];
+  for (let month = 0; month <= 36; month += 1) {
+    monthlyPoints.push(makePointAt(month));
   }
 
   const threeYearLegacyTotal = results.legacyMonthlyCost * 36;
-  const threeYearDiyTotal = competitorSetupCost + results.diyMonthlyCost * 36;
-  const threeYearByollmTotal = byollmSetupCost + results.byollmMonthlyCost * 36;
-  const threeYearDiyHyperscalerTotal =
-    diyHyperscalerSetupCost + results.diyHyperscalerMonthlyCost * 36;
-  const threeYearOmiliaTotal = computeOmiliaCumulativeAtMonth(
-    36,
-    results.omiliaMonthlyCost,
-    implementationCost
-  );
+  const threeYearByollmTotal = byollmTraj.atMonth(36);
+  const threeYearDiyHyperscalerTotal = diyTraj.atMonth(36);
+  const threeYearDiyTotal = activeIsByollm ? threeYearByollmTotal : threeYearDiyHyperscalerTotal;
+  const threeYearOmiliaTotal = omiliaTraj.atMonth(36);
 
   return {
     implementationCost,
     competitorSetupCost,
     byollmSetupCost,
     diyHyperscalerSetupCost,
-    paybackMonths,
-    byollmPaybackMonths,
-    diyHyperscalerPaybackMonths,
+    omiliaBuildMonths,
+    byollmBuildMonths,
+    diyBuildMonths,
+    paybackMonths: implementationCost <= 0 ? 0 : omiliaTraj.breakEvenMonths,
+    byollmPaybackMonths: byollmTraj.breakEvenMonths,
+    diyHyperscalerPaybackMonths: diyTraj.breakEvenMonths,
     points,
+    monthlyPoints,
     threeYearLegacyTotal,
     threeYearDiyTotal,
     threeYearByollmTotal,
@@ -571,9 +619,9 @@ export function computeSensitivityScenarios(
   preset: VerticalPreset,
   psDays: number,
   psDayRate: number,
-  competitorArchetype: CompetitorArchetype = 'byollm'
+  competitorArchetype: CompetitorArchetype = 'byollm',
+  hleeWeeks = 6
 ): SensitivityScenario[] {
-  const implementationCost = Math.max(0, psDays * psDayRate);
   const conservativeTarget = Math.max(inputs.baseContainment + 5, inputs.targetContainment - 10);
   const expectedTarget = Math.max(inputs.baseContainment + 5, inputs.targetContainment);
   const aggressiveTarget = Math.min(99, Math.max(expectedTarget + 5, inputs.targetContainment + 10));
@@ -590,14 +638,14 @@ export function computeSensitivityScenarios(
       preset,
       competitorArchetype
     );
-    const pb = computePaybackAndCashFlow(res, psDays, psDayRate, inputs.omiliaOutcomeRate);
+    const pb = computePaybackAndCashFlow(res, psDays, psDayRate, inputs.omiliaOutcomeRate, hleeWeeks);
     return {
       label: d.label,
       targetContainmentPct: Math.round(res.targetCont * 100),
       annualNetSavings: res.annualNetSavings,
       threeYearVsCompetitor: pb.threeYearCompetitorSavings,
       ftesFreed: res.ftesFreed,
-      paybackMonths: res.monthlyNetSavings > 0 ? implementationCost / res.monthlyNetSavings : null,
+      paybackMonths: pb.paybackMonths,
     };
   });
 }
@@ -936,7 +984,7 @@ export function buildExecutiveDealBrief(params: {
     `Reclaimed Non-Layoff Capacity Value: ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr (${Math.round(results.ftesFreed).toLocaleString()} FTEs freed via attrition/BPO/surge avoidance)`,
     `3-Year TCO Advantage vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)} (incl. Self-Learning Compression)`,
     `Phase 1 Implementation Cost (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/day): ${formatCurrencyFull(payback.implementationCost)} vs. ${comp.setupRangeLabel}`,
-    `Break-Even Payback Period (Hard P&L): ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'}`,
+    `Break-Even Payback (Hard P&L incl. ${payback.omiliaBuildMonths.toFixed(1)}m build + 2m ramp): ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'}`,
     `Containment Lift: +${results.containmentLiftPct}% (${Math.round(results.omiliaAutomatedCalls).toLocaleString()} calls automated/mo)`,
     `Agent Capacity Reclaimed: ${results.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(results.ftesFreed).toLocaleString()} FTEs freed)`,
     `Omilia Outcome Pricing: $${inputs.omiliaOutcomeRate.toFixed(2)}/resolved (Yr1) → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/resolved (Yr3 Self-Learning) | Human Cost: $${results.unitHumanCost.toFixed(2)}/call`,
@@ -1014,7 +1062,7 @@ export function buildDealCsv(params: {
     ['Phase 1 PS Effort', `${hlee.psDays} days @ $${psDayRate}/day`],
     ['Phase 1 Implementation Cost (USD)', Math.round(payback.implementationCost).toString()],
     [`${comp.shortLabel} Upfront Build Cost (USD)`, Math.round(payback.competitorSetupCost).toString()],
-    ['Break-Even Payback (Months)', payback.paybackMonths !== null ? payback.paybackMonths.toFixed(1) : 'N/A'],
+    ['Break-Even Payback (Months, Incl. Build & Ramp)', payback.paybackMonths !== null ? payback.paybackMonths.toFixed(1) : 'N/A'],
     ['Equivalent FTEs Freed', Math.round(results.ftesFreed).toString()],
     [],
     ['ANNUALIZED & 3-YR TCO COMPARISON', 'Legacy Baseline', comp.tableHeader, 'Omilia OCP'],

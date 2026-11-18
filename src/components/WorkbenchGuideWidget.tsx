@@ -82,6 +82,7 @@ interface WorkbenchGuideWidgetProps {
   onAddCustomUseCase: (name: string, feas: number, imp: number) => void;
   onOpenBrief: () => void;
   onOpenScenarios: () => void;
+  onOpenCustomerSheet: () => void;
   onDownloadCsv: () => void;
   onDownloadDeck: () => void;
   onOpenTsModal: () => void;
@@ -107,7 +108,7 @@ const TOUR_STEPS: {
     tab: 'economics',
     title: 'Step 1 of 5 · Unit Economics, Hard P&L Realization & Break-Even',
     summary: ({ preset, inputs, results, payback }) =>
-      `Viewing ${preset.name} vs. ${results.competitorProfile.title} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Baseline: toggle Packaged BYOLLM (Cognigy/Kore/Parloa) vs. DIY Hyperscaler (Azure OpenAI/Bedrock).\n• Volume, Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/res), and Dynamic Auto-Fit FTEs (${inputs.autoFitAgents !== false ? 'Live' : 'Manual'}).\n• Hard P&L Labor Realization (${results.laborRealizationPct}%): separates bankable cash savings (attrition, BPO flex-down, hiring avoidance—zero Day-1 layoffs) from Reclaimed Queue Capacity.\n• 36-Month Cash Flow: plots all-model Color-Coded Break-Even markers (Omilia teal ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'}, BYOLLM amber, DIY rose) + Offline Self-Learning compression & ±10% Sensitivity.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr Hard P&L Savings + ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity.`,
+      `Viewing ${preset.name} vs. ${results.competitorProfile.title} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Baseline: toggle Packaged BYOLLM (Cognigy/Kore/Parloa) vs. DIY Hyperscaler (Azure OpenAI/Bedrock).\n• Volume, Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/res), and Dynamic Auto-Fit FTEs (${inputs.autoFitAgents !== false ? 'Live' : 'Manual'}).\n• Hard P&L Labor Realization (${results.laborRealizationPct}%): separates bankable cash savings (attrition, BPO flex-down, hiring avoidance—zero Day-1 layoffs) from Reclaimed Queue Capacity.\n• 36-Month Cash Flow: models realistic build-time wait (${payback.omiliaBuildMonths.toFixed(1)}m Omilia HLEE vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY) + 2-month traffic ramp (25%→60%→100%), plotting color-coded Break-Even markers (Omilia teal ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'}, BYOLLM amber, DIY rose) + ±10% Sensitivity.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr Hard P&L Savings + ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity.`,
   },
   {
     step: 2,
@@ -169,6 +170,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   onAddCustomUseCase,
   onOpenBrief,
   onOpenScenarios,
+  onOpenCustomerSheet,
   onDownloadCsv,
   onDownloadDeck,
   onOpenTsModal,
@@ -293,7 +295,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       name: 'Omilia Outcome Rate & Self-Learning Compression',
       currentValue: `$${inputs.omiliaOutcomeRate.toFixed(2)} → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)} Yr3`,
       whatItDoes:
-        'Sets Year 1 flat outcome pricing ($0.15–$1.00/resolved) with zero pass-through token/ASR/TTS fees, then applies Offline Self-Learning compression (-10% Yr2, -18% Yr3) over 36 months.',
+        'Sets Year 1 flat outcome pricing ($0.15–$1.00/resolved) with zero pass-through token/ASR/TTS fees, then applies Offline Self-Learning compression (-10% Yr2, -18% Yr3) strictly to Omilia’s variable outcome spend over 36 months.',
       whyItMatters:
         'Proves how Omilia eliminates multi-turn token volatility today and lowers effective unit cost over 3 years by codifying recurring agentic patterns into deterministic micro-flows.',
       keywords: [
@@ -435,11 +437,11 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       tab: 'economics',
       tabLabel: 'Unit Economics',
       name: '36-Month Cash Flow, Color-Coded Break-Even & Sensitivity Matrix',
-      currentValue: `Omilia ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'} · BYOLLM ${payback.byollmPaybackMonths !== null ? `${payback.byollmPaybackMonths.toFixed(1)}m` : 'N/A'} · DIY ${payback.diyHyperscalerPaybackMonths !== null ? `${payback.diyHyperscalerPaybackMonths.toFixed(1)}m` : 'N/A'}`,
+      currentValue: `Omilia ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)}m` : 'N/A'} (${payback.omiliaBuildMonths.toFixed(1)}m build) · BYOLLM ${payback.byollmPaybackMonths !== null ? `${payback.byollmPaybackMonths.toFixed(1)}m` : 'N/A'} · DIY ${payback.diyHyperscalerPaybackMonths !== null ? `${payback.diyHyperscalerPaybackMonths.toFixed(1)}m` : 'N/A'}`,
       whatItDoes:
-        'Plots cumulative 36-month spend vs. Legacy (dashed) with color-coded Break-Even intersection dots & drop lines directly on the chart for Omilia (Teal), Packaged BYOLLM (Amber), and DIY Hyperscaler (Rose), plus a ±10% Containment Sensitivity view.',
+        `Plots cumulative 36-month spend vs. Legacy (dashed) after deducting both Omilia consumption and build-time wait (${payback.omiliaBuildMonths.toFixed(1)}m Omilia HLEE vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY) + a 2-month phased traffic ramp (25%→60%→100%). Color-coded Break-Even dots appear directly on the chart for Omilia (Teal), BYOLLM (Amber), and DIY (Rose).`,
       whyItMatters:
-        'Gives CFOs an immediate visual comparison of how fast Hard P&L savings recover Phase 1 PS vs. slower BYOLLM/DIY builds—while proving positive ROI even at -10% conservative containment.',
+        'Gives CFOs a realistic timeline—accounting for build wait, traffic ramp, platform/outcome fees, and Hard P&L realization—so time-to-value advantages of AI Bootstrapping vs. slower DIY builds show clearly on the curve.',
       keywords: [
         'payback',
         'cash flow',
@@ -452,6 +454,9 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
         'markers',
         'color',
         'chart',
+        'build',
+        'ramp',
+        'consumption',
       ],
       actionLabel: 'Open Unit Economics',
       onAction: () => onSelectTab('economics'),
@@ -689,6 +694,32 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       ],
       actionLabel: 'Download Deck (.pptx)',
       onAction: onDownloadDeck,
+    },
+    {
+      id: 'customerSheet',
+      tab: 'economics',
+      tabLabel: 'Global',
+      name: 'Customer Discovery Sheet (.xlsx / .csv) Download & Upload',
+      currentValue: '3-Tab Intake Ready',
+      whatItDoes:
+        'Downloads a customer-ready Excel workbook (with dropdowns, editable light-teal input column, Use Cases call drivers tab, and benchmarks glossary) that prospects fill out asynchronously and you upload back to auto-configure all 5 tabs.',
+      whyItMatters:
+        'Removes friction during discovery: send a clean questionnaire to the customer’s WFM/Finance team, then upload the completed sheet to populate sliders, Radar use cases, POV charter, and SOW guardrails automatically.',
+      keywords: [
+        'spreadsheet',
+        'excel',
+        'xlsx',
+        'intake',
+        'questionnaire',
+        'upload',
+        'import',
+        'customer sheet',
+        'template',
+        'collect',
+        'form',
+      ],
+      actionLabel: 'Open Customer Sheet',
+      onAction: onOpenCustomerSheet,
     },
   ];
 

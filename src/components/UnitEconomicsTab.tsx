@@ -95,7 +95,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <span>Annual Hard P&amp;L Savings</span>
               <InfoTooltip
                 label="Annual Hard P&L Savings"
-                description={`Year-1 annualized cash savings vs. Legacy Human + IVR at ${results.laborRealizationPct}% Hard P&L Labor Realization (captured via natural attrition, BPO flex-down, and hiring avoidance—never assuming Day-1 layoffs). The remaining ${100 - results.laborRealizationPct}% stays in operations as ${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr Reclaimed Capacity.`}
+                description={`Year-1 annualized steady-state cash savings vs. Legacy Human + IVR at ${results.laborRealizationPct}% Hard P&L Labor Realization (captured via natural attrition, BPO flex-down, and hiring avoidance—never assuming Day-1 layoffs). Break-even payback (${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} mo` : 'N/A'}) also factors in your ${payback.omiliaBuildMonths.toFixed(1)}m HLEE build wait and 2-month phased traffic ramp (25% -> 60% -> 100%).`}
                 tcoImpact="Separates bankable CFO P&L cost takeout from frontline queue capacity relief so financial break-even stays defensible."
                 placement="bottom"
               />
@@ -844,14 +844,14 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                   </h2>
                   <InfoTooltip
                     label="Annual TCO vs. 36-Month Cash Flow & Break-Even Markers"
-                    description={`Switch between Year-1 annualized bars and the 36-month cumulative curve. The 36-Mo Cash Flow plots color-coded Break-Even markers directly on the chart for Omilia (Teal), Packaged BYOLLM (Amber), and DIY Hyperscaler (Rose) vs. Legacy, calculated using ${results.laborRealizationPct}% Hard P&L Labor Realization.`}
-                    tcoImpact="Shows both Day-1 hard cash savings and exact break-even months without assuming instant Day-1 agent layoffs."
+                    description={`Switch between Year-1 annualized bars and the 36-month cumulative curve. Each trajectory accounts for realistic build-time wait (${payback.omiliaBuildMonths.toFixed(1)}m Omilia HLEE vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY) plus a 2-month phased traffic ramp (25% -> 60% -> 100%) at ${results.laborRealizationPct}% Hard P&L capture.`}
+                    tcoImpact="Shows color-coded Break-Even markers for Omilia (Teal), BYOLLM (Amber), and DIY (Rose) with build lag, consumption, and no Day-1 layoffs."
                   />
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {chartView === 'bars'
                     ? `Omilia flat $${inputs.omiliaOutcomeRate.toFixed(2)}/res vs. metered pass-through fees (${results.laborRealizationPct}% Hard P&L labor capture)`
-                    : `Omilia PS ${formatCurrencyFull(payback.implementationCost)} (${hleeTimelineLabel}) vs. ${comp.setupRangeLabel} · Hard P&L break-even @ ${results.laborRealizationPct}% capture`}
+                    : `Omilia PS ${formatCurrencyFull(payback.implementationCost)} (${payback.omiliaBuildMonths.toFixed(1)}m build + 2m ramp) vs. ${payback.byollmBuildMonths.toFixed(1)}m BYOLLM / ${payback.diyBuildMonths.toFixed(1)}m DIY · ${results.laborRealizationPct}% Hard P&L`}
                 </p>
               </div>
               <div className="no-print flex items-center gap-2 shrink-0">
@@ -929,8 +929,8 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 const xOf = (m: number) => padL + (m / 36) * plotW;
                 const yOf = (val: number) => padT + (1 - val / maxCumulative) * plotH;
 
-                const makePath = (getter: (pt: (typeof payback.points)[number]) => number) =>
-                  payback.points
+                const makePath = (getter: (pt: (typeof payback.monthlyPoints)[number]) => number) =>
+                  payback.monthlyPoints
                     .map((pt, i) => `${i === 0 ? 'M' : 'L'} ${xOf(pt.month).toFixed(1)} ${yOf(getter(pt)).toFixed(1)}`)
                     .join(' ');
 
@@ -1176,7 +1176,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                         <strong className="font-semibold text-slate-800 dark:text-slate-200">
                           Offline Self-Learning Cost Compression:
                         </strong>{' '}
-                        Closed loop codifies agentic turns into deterministic micro-flows over 36 months.
+                        Closed loop codifies agentic turns into deterministic micro-flows, compressing variable outcome fees in Yrs 2–3.
                       </span>
                       <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
                         Yr1 ${payback.omiliaUnitRatesByYear.yr1.toFixed(2)} → Yr2 $

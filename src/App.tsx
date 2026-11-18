@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AiRadarTab } from './components/AiRadarTab';
+import { CustomerSheetModal } from './components/CustomerSheetModal';
 import { DealBriefModal } from './components/DealBriefModal';
 import { DealScopingTab } from './components/DealScopingTab';
 import { McpInspectorTab } from './components/McpInspectorTab';
@@ -53,6 +54,7 @@ import {
   ScenarioPayload,
 } from './utils/scenarioStorage';
 import { downloadValuePropDeck } from './utils/exportDeck';
+import { ParsedCustomerIntake } from './utils/customerSheet';
 
 function buildDefaultUseCases(preset: VerticalPreset): UseCase[] {
   return preset.useCases.map((u, idx) => ({
@@ -196,6 +198,7 @@ export default function App() {
   const [briefCopied, setBriefCopied] = useState(false);
   const [tsModalOpen, setTsModalOpen] = useState(false);
   const [scenariosModalOpen, setScenariosModalOpen] = useState(false);
+  const [customerSheetModalOpen, setCustomerSheetModalOpen] = useState(false);
   const [isExportingDeck, setIsExportingDeck] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(() =>
     urlSeed ? `Loaded shared ${VERTICAL_PRESETS[urlSeed.vertical].shortName} scenario from URL` : null
@@ -236,8 +239,15 @@ export default function App() {
   );
 
   const payback = useMemo(
-    () => computePaybackAndCashFlow(roiResults, hlee.psDays, psDayRate, inputs.omiliaOutcomeRate),
-    [roiResults, hlee.psDays, psDayRate, inputs.omiliaOutcomeRate]
+    () =>
+      computePaybackAndCashFlow(
+        roiResults,
+        hlee.psDays,
+        psDayRate,
+        inputs.omiliaOutcomeRate,
+        hlee.weeks
+      ),
+    [roiResults, hlee.psDays, psDayRate, inputs.omiliaOutcomeRate, hlee.weeks]
   );
 
   const povPlan = useMemo(
@@ -253,8 +263,16 @@ export default function App() {
   );
 
   const sensitivity = useMemo(
-    () => computeSensitivityScenarios(inputs, preset, hlee.psDays, psDayRate, competitorArchetype),
-    [inputs, preset, hlee.psDays, psDayRate, competitorArchetype]
+    () =>
+      computeSensitivityScenarios(
+        inputs,
+        preset,
+        hlee.psDays,
+        psDayRate,
+        competitorArchetype,
+        hlee.weeks
+      ),
+    [inputs, preset, hlee.psDays, psDayRate, competitorArchetype, hlee.weeks]
   );
 
   const briefText = useMemo(
@@ -594,6 +612,32 @@ export default function App() {
     notify('Deleted saved deal profile');
   };
 
+  const handleApplyCustomerIntake = (parsed: ParsedCustomerIntake) => {
+    setVertical(parsed.vertical);
+    setRoiByVertical((prev) => ({
+      ...prev,
+      [parsed.vertical]: parsed.inputs,
+    }));
+    setUseCasesByVertical((prev) => ({
+      ...prev,
+      [parsed.vertical]: parsed.useCases,
+    }));
+    setSelectedUcByVertical((prev) => ({
+      ...prev,
+      [parsed.vertical]: parsed.useCases[0]?.id ?? null,
+    }));
+    setPartnerMotion(parsed.partnerMotion);
+    setSovereignty(parsed.sovereignty);
+    setApiReadiness(parsed.apiReadiness);
+    setCompetitorArchetype(parsed.competitorArchetype);
+    setPovConfig(parsed.povConfig);
+    setPsDayRate(parsed.psDayRate);
+    setDealMeta(parsed.dealMeta);
+    notify(
+      `Configured ${VERTICAL_PRESETS[parsed.vertical].shortName} workbench from ${parsed.fileName}`
+    );
+  };
+
   const handleDownloadCsv = () => {
     const csv = buildDealCsv({
       preset,
@@ -689,7 +733,7 @@ export default function App() {
       `Annual Hard P&L Savings: ${formatCurrencyCompact(roiResults.annualNetSavings)} | Reclaimed Capacity Value: ${formatCurrencyCompact(roiResults.annualCapacityReinvestedValue)}/yr`,
       `3-Year TCO Advantage vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)}`,
       `Self-Learning Outcome Rate: $${payback.omiliaUnitRatesByYear.yr1.toFixed(2)}/res (Yr1) -> $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/res (Yr3)`,
-      `Break-Even Payback (Hard P&L): ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/d vs. ${comp.setupRangeLabel})`,
+      `Break-Even Payback (Hard P&L): ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months (incl. ${payback.omiliaBuildMonths.toFixed(1)}m build + 2m ramp)` : 'N/A'} (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/d vs. ${comp.setupRangeLabel})`,
       `Capacity Reclaimed: ${roiResults.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(roiResults.ftesFreed).toLocaleString()} FTEs freed)`,
       `Annualized Yr1 TCO: Legacy ${formatCurrencyCompact(roiResults.annualLegacy)} | ${comp.tableHeader} ${formatCurrencyCompact(roiResults.annualDiy)} | Omilia ${formatCurrencyCompact(roiResults.annualOmilia)}`,
     ]
@@ -747,6 +791,7 @@ export default function App() {
         onToggleTheme={() => setIsDark((d) => !d)}
         onPrint={() => window.print()}
         onOpenScenarios={() => setScenariosModalOpen(true)}
+        onOpenCustomerSheet={() => setCustomerSheetModalOpen(true)}
         onDownloadDeck={handleDownloadDeck}
         isExportingDeck={isExportingDeck}
         savedCount={savedDeals.length}
@@ -850,6 +895,7 @@ export default function App() {
             preset={preset}
             inputs={inputs}
             results={roiResults}
+            payback={payback}
             useCases={useCases}
             partnerMotion={partnerMotion}
             sovereignty={sovereignty}
@@ -924,6 +970,24 @@ export default function App() {
         onCopyShareLink={handleCopyShareLink}
       />
 
+      <CustomerSheetModal
+        open={customerSheetModalOpen}
+        onClose={() => setCustomerSheetModalOpen(false)}
+        seedState={{
+          vertical,
+          inputs,
+          useCases,
+          partnerMotion,
+          sovereignty,
+          apiReadiness,
+          competitorArchetype,
+          povConfig,
+          psDayRate,
+          dealMeta,
+        }}
+        onApplyIntake={handleApplyCustomerIntake}
+      />
+
       <TsServerModal
         open={tsModalOpen}
         onClose={() => setTsModalOpen(false)}
@@ -954,6 +1018,7 @@ export default function App() {
         onAddCustomUseCase={handleAddCustomUseCase}
         onOpenBrief={() => setBriefModalOpen(true)}
         onOpenScenarios={() => setScenariosModalOpen(true)}
+        onOpenCustomerSheet={() => setCustomerSheetModalOpen(true)}
         onDownloadCsv={handleDownloadCsv}
         onDownloadDeck={handleDownloadDeck}
         onOpenTsModal={() => setTsModalOpen(true)}
