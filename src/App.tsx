@@ -11,6 +11,7 @@ import { McpInspectorTab } from './components/McpInspectorTab';
 import { TabKey, TopBar } from './components/TopBar';
 import { TsServerModal } from './components/TsServerModal';
 import { UnitEconomicsTab } from './components/UnitEconomicsTab';
+import { WorkbenchGuideWidget } from './components/WorkbenchGuideWidget';
 import { WorkspaceBar } from './components/WorkspaceBar';
 import {
   ApiReadiness,
@@ -490,12 +491,32 @@ export default function App() {
         onNotify={notify}
       />
 
+      <WorkbenchGuideWidget
+        activeTab={activeTab}
+        vertical={vertical}
+        preset={preset}
+        inputs={inputs}
+        results={roiResults}
+        useCases={useCases}
+        partnerMotion={partnerMotion}
+        sovereignty={sovereignty}
+        apiReadiness={apiReadiness}
+        hlee={hlee}
+        onSelectTab={setActiveTab}
+        onChangeVertical={handleChangeVertical}
+        onUpdateInput={handleUpdateInput}
+        onChangeSovereignty={setSovereignty}
+        onAddCustomUseCase={handleAddCustomUseCase}
+        onOpenBrief={() => setBriefModalOpen(true)}
+        onOpenTsModal={() => setTsModalOpen(true)}
+      />
+
       {/* Non-intrusive Toast */}
       {toastMsg && (
         <div
           role="status"
           aria-live="polite"
-          className="no-print fixed bottom-5 right-5 z-50 rounded-lg border border-slate-200 bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-lg dark:border-slate-700 dark:bg-slate-800"
+          className="no-print fixed bottom-5 left-5 z-50 rounded-lg border border-slate-200 bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-lg dark:border-slate-700 dark:bg-slate-800"
         >
           {toastMsg}
         </div>
