@@ -1,5 +1,6 @@
 import {
   ApiReadiness,
+  DealMetadata,
   PartnerMotion,
   SovereigntyTier,
   UseCase,
@@ -311,6 +312,91 @@ export function calculateHlee(
   };
 }
 
+export interface CashFlowPoint {
+  month: number;
+  legacyCumulative: number;
+  diyCumulative: number;
+  omiliaCumulative: number;
+}
+
+export interface PaybackAnalysis {
+  implementationCost: number;
+  paybackMonths: number | null;
+  points: CashFlowPoint[];
+  threeYearOmiliaTotal: number;
+  threeYearLegacyTotal: number;
+  threeYearDiyTotal: number;
+}
+
+export function computePaybackAndCashFlow(
+  results: RoiResults,
+  psDays: number,
+  psDayRate: number
+): PaybackAnalysis {
+  const implementationCost = Math.max(0, psDays * psDayRate);
+  const diySetupCost = implementationCost * 1.45; // Custom glue & prompt engineering overhead
+  const paybackMonths =
+    results.monthlyNetSavings > 0 ? implementationCost / results.monthlyNetSavings : null;
+
+  const points: CashFlowPoint[] = [];
+  for (let month = 0; month <= 36; month += 3) {
+    points.push({
+      month,
+      legacyCumulative: results.legacyMonthlyCost * month,
+      diyCumulative: diySetupCost + results.diyMonthlyCost * month,
+      omiliaCumulative: implementationCost + results.omiliaMonthlyCost * month,
+    });
+  }
+
+  return {
+    implementationCost,
+    paybackMonths,
+    points,
+    threeYearLegacyTotal: results.legacyMonthlyCost * 36,
+    threeYearDiyTotal: diySetupCost + results.diyMonthlyCost * 36,
+    threeYearOmiliaTotal: implementationCost + results.omiliaMonthlyCost * 36,
+  };
+}
+
+export interface SensitivityScenario {
+  label: string;
+  targetContainmentPct: number;
+  annualNetSavings: number;
+  threeYearVsDiy: number;
+  ftesFreed: number;
+  paybackMonths: number | null;
+}
+
+export function computeSensitivityScenarios(
+  inputs: RoiInputs,
+  preset: VerticalPreset,
+  psDays: number,
+  psDayRate: number
+): SensitivityScenario[] {
+  const implementationCost = Math.max(0, psDays * psDayRate);
+  const conservativeTarget = Math.max(inputs.baseContainment + 5, inputs.targetContainment - 10);
+  const expectedTarget = Math.max(inputs.baseContainment + 5, inputs.targetContainment);
+  const aggressiveTarget = Math.min(99, Math.max(expectedTarget + 5, inputs.targetContainment + 10));
+
+  const defs = [
+    { label: 'Conservative (-10%)', target: conservativeTarget },
+    { label: 'Expected Target', target: expectedTarget },
+    { label: 'Aggressive (+10%)', target: aggressiveTarget },
+  ];
+
+  return defs.map((d) => {
+    const res = calculateUnitEconomics({ ...inputs, targetContainment: d.target }, preset);
+    return {
+      label: d.label,
+      targetContainmentPct: Math.round(res.targetCont * 100),
+      annualNetSavings: res.annualNetSavings,
+      threeYearVsDiy: res.threeYearDiySavings,
+      ftesFreed: res.ftesFreed,
+      paybackMonths: res.monthlyNetSavings > 0 ? implementationCost / res.monthlyNetSavings : null,
+    };
+  });
+}
+
 export function buildExecutiveDealBrief(params: {
   preset: VerticalPreset;
   inputs: RoiInputs;
@@ -319,8 +405,22 @@ export function buildExecutiveDealBrief(params: {
   motionLabel: string;
   sovereigntyLabel: string;
   hlee: HleeResult;
+  psDayRate: number;
+  payback: PaybackAnalysis;
+  dealMeta: DealMetadata;
 }): string {
-  const { preset, inputs, results, includedUseCases, motionLabel, sovereigntyLabel, hlee } = params;
+  const {
+    preset,
+    inputs,
+    results,
+    includedUseCases,
+    motionLabel,
+    sovereigntyLabel,
+    hlee,
+    psDayRate,
+    payback,
+    dealMeta,
+  } = params;
   const includedLines =
     includedUseCases.length > 0
       ? includedUseCases
@@ -331,11 +431,21 @@ export function buildExecutiveDealBrief(params: {
           .join('\n')
       : '  (None currently selected)';
 
+  const metaLines = [
+    dealMeta.prospectName ? `Prospect: ${dealMeta.prospectName}` : null,
+    dealMeta.partnerName ? `Partner: ${dealMeta.partnerName}` : null,
+    dealMeta.ccaasPlatform ? `Target CCaaS: ${dealMeta.ccaasPlatform}` : null,
+    dealMeta.dealOwner ? `Deal Owner: ${dealMeta.dealOwner}` : null,
+  ].filter(Boolean);
+
   return [
     `OMILIA ENTERPRISE CX DEAL BRIEF — ${preset.name.toUpperCase()}`,
     `================================================================`,
+    ...(metaLines.length > 0 ? [metaLines.join(' | '), ``] : []),
     `Annual Net Savings: ${formatCurrencyCompact(results.annualNetSavings)} (${formatCurrencyCompact(results.monthlyNetSavings)}/mo vs. baseline)`,
     `3-Year TCO Advantage vs. DIY Frontier LLM: ${formatCurrencyCompact(results.threeYearDiySavings)}`,
+    `Phase 1 Implementation Cost (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/day): ${formatCurrencyFull(payback.implementationCost)}`,
+    `Break-Even Payback Period: ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'}`,
     `Containment Lift: +${results.containmentLiftPct}% (${Math.round(results.omiliaAutomatedCalls).toLocaleString()} calls automated/mo)`,
     `Agent Capacity Reclaimed: ${results.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(results.ftesFreed).toLocaleString()} FTEs freed)`,
     `Omilia Outcome Pricing: $${inputs.omiliaOutcomeRate.toFixed(2)}/resolved | Loaded Human Cost: $${results.unitHumanCost.toFixed(2)}/call`,
@@ -351,4 +461,80 @@ export function buildExecutiveDealBrief(params: {
     `- Target Backend Stack: ${preset.backendStack}`,
     `- Architecture Guarantee: Zero Frontier Egress | <300ms Parallel MCP Dispatch | <45ms Lexis TTS`,
   ].join('\n');
+}
+
+function csvEscape(val: string | number): string {
+  const s = String(val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+export function buildDealCsv(params: {
+  preset: VerticalPreset;
+  inputs: RoiInputs;
+  results: RoiResults;
+  useCases: UseCase[];
+  hlee: HleeResult;
+  psDayRate: number;
+  payback: PaybackAnalysis;
+  sensitivity: SensitivityScenario[];
+  dealMeta: DealMetadata;
+}): string {
+  const { preset, inputs, results, useCases, hlee, psDayRate, payback, sensitivity, dealMeta } = params;
+  const rows: string[][] = [
+    ['Omilia Partner Workbench Export', preset.name],
+    ['Prospect', dealMeta.prospectName || 'Unspecified'],
+    ['Partner', dealMeta.partnerName || 'Unspecified'],
+    ['CCaaS Platform', dealMeta.ccaasPlatform || 'Unspecified'],
+    ['Deal Owner', dealMeta.dealOwner || 'Unspecified'],
+    [],
+    ['UNIT ECONOMICS SUMMARY', 'Value'],
+    ['Monthly Inbound Call Volume', inputs.callVolume.toString()],
+    ['Surge Multiplier', `${inputs.surge.toFixed(1)}x`],
+    ['Baseline Containment', `${inputs.baseContainment}%`],
+    ['Target Omilia Containment', `${Math.round(results.targetCont * 100)}%`],
+    ['Omilia Outcome Rate (USD)', inputs.omiliaOutcomeRate.toFixed(2)],
+    ['Loaded Human Cost per Call (USD)', results.unitHumanCost.toFixed(2)],
+    ['Annual Net Savings (USD)', Math.round(results.annualNetSavings).toString()],
+    ['3-Year Advantage vs DIY LLM (USD)', Math.round(results.threeYearDiySavings).toString()],
+    ['Phase 1 PS Effort', `${hlee.psDays} days @ $${psDayRate}/day`],
+    ['Phase 1 Implementation Cost (USD)', Math.round(payback.implementationCost).toString()],
+    ['Break-Even Payback (Months)', payback.paybackMonths !== null ? payback.paybackMonths.toFixed(1) : 'N/A'],
+    ['Equivalent FTEs Freed', Math.round(results.ftesFreed).toString()],
+    [],
+    ['ANNUALIZED TCO COMPARISON', 'Legacy Baseline', 'DIY Frontier LLM', 'Omilia OCP'],
+    ['Effective Containment', `${Math.round(results.baseCont * 100)}%`, `${Math.round(results.diyContainment * 100)}%`, `${Math.round(results.targetCont * 100)}%`],
+    ['Monthly Platform Spend (USD)', Math.round(results.legacyPlatformSpendMo).toString(), Math.round(results.diyPlatformSpendMo).toString(), Math.round(results.omiliaPlatformSpendMo).toString()],
+    ['Monthly Escalation Labor (USD)', Math.round(results.legacyHumanCostMo).toString(), Math.round(results.diyHumanCostMo).toString(), Math.round(results.omiliaHumanCostMo).toString()],
+    ['Annualized TCO (USD)', Math.round(results.annualLegacy).toString(), Math.round(results.annualDiy).toString(), Math.round(results.annualOmilia).toString()],
+    [],
+    ['CONTAINMENT SENSITIVITY', 'Target Containment', 'Annual Net Savings (USD)', '3-Year vs DIY (USD)', 'Payback (Months)', 'FTEs Freed'],
+    ...sensitivity.map((s) => [
+      s.label,
+      `${s.targetContainmentPct}%`,
+      Math.round(s.annualNetSavings).toString(),
+      Math.round(s.threeYearVsDiy).toString(),
+      s.paybackMonths !== null ? s.paybackMonths.toFixed(1) : 'N/A',
+      Math.round(s.ftesFreed).toString(),
+    ]),
+    [],
+    ['AI RADAR 2.0 PORTFOLIO', 'Quadrant', 'Feasibility', 'Impact', 'Phase 1 SOW Included', 'PS Days', 'Runtime Tier'],
+    ...useCases.map((uc) => {
+      const q = getQuadrantMeta(uc.feas, uc.imp);
+      const included = isTopRightQuadrant(uc) && uc.included !== false;
+      return [
+        uc.name,
+        q.label,
+        uc.feas.toString(),
+        uc.imp.toString(),
+        included ? 'Yes' : 'No',
+        included ? getUseCasePsDays(uc).toString() : '0',
+        uc.runtime,
+      ];
+    }),
+  ];
+
+  return rows.map((r) => r.map(csvEscape).join(',')).join('\n');
 }

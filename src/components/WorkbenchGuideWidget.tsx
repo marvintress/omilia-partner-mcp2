@@ -21,6 +21,7 @@ import {
   formatCurrencyCompact,
   HleeResult,
   isTopRightQuadrant,
+  PaybackAnalysis,
   RoiInputs,
   RoiResults,
 } from '../utils/calculations';
@@ -61,6 +62,8 @@ interface WorkbenchGuideWidgetProps {
   partnerMotion: PartnerMotion;
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
+  psDayRate: number;
+  payback: PaybackAnalysis;
   hlee: HleeResult;
   onSelectTab: (tab: TabKey) => void;
   onChangeVertical: (v: VerticalKey) => void;
@@ -68,6 +71,8 @@ interface WorkbenchGuideWidgetProps {
   onChangeSovereignty: (s: SovereigntyTier) => void;
   onAddCustomUseCase: (name: string, feas: number, imp: number) => void;
   onOpenBrief: () => void;
+  onOpenScenarios: () => void;
+  onDownloadCsv: () => void;
   onOpenTsModal: () => void;
 }
 
@@ -88,7 +93,7 @@ const TOUR_STEPS: {
     tab: 'economics',
     title: 'Step 1 of 4 · Unit Economics & TCO Simulator',
     summary: ({ preset, inputs, results }) =>
-      `Viewing ${preset.name} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Volume, Baseline vs. Target Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), and Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/resolved).\n• Surge Multiplier (1.0x–4.0x) to expose nonlinear DIY LLM token retries (surge^1.38).\n• Agent wage/burden/occupancy (or CFO Direct Override) + TalkGuard & CSR CoPilot toggles + Auto-Fit FTEs.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr net savings and ${formatCurrencyCompact(results.threeYearDiySavings)} 3-year edge over DIY LLMs.`,
+      `Viewing ${preset.name} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Volume, Baseline vs. Target Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), and Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/resolved).\n• Surge Multiplier (1.0x–4.0x) + toggle between Annual TCO Bars and the 36-Month Cumulative Cash Flow / Break-Even Payback curve.\n• Switch the CFO Breakdown table to Sensitivity to stress-test ±10% containment, or tune wage/burden/TalkGuard/CSR CoPilot.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr net savings and ${formatCurrencyCompact(results.threeYearDiySavings)} 3-year edge over DIY LLMs.`,
   },
   {
     step: 2,
@@ -97,7 +102,7 @@ const TOUR_STEPS: {
     summary: ({ useCases }) => {
       const topRight = useCases.filter(isTopRightQuadrant);
       const included = topRight.filter((u) => u.included !== false);
-      return `Plots Feasibility & Data Maturity (X) against Financial & CX Impact (Y).\n\nWhat you can tweak here:\n• Click any pin to inspect its Omilia Runtime Tier, Phased "Training Wheels" rollout, and Glass Box gate.\n• Toggle Phase 1 SOW checkboxes on Top-Right items (≥50F & ≥50I)—currently ${included.length} of ${topRight.length} active.\n• Plot custom prospect call drivers live or clear the canvas for a clean discovery workshop.`;
+      return `Plots Feasibility & Data Maturity (X) against Financial & CX Impact (Y).\n\nWhat you can tweak here:\n• Drag any pin directly on the 2×2 matrix—or adjust the Feasibility & Impact sliders in the Inspector—to re-score workflows live.\n• Toggle Phase 1 SOW checkboxes on Top-Right items (≥50F & ≥50I)—currently ${included.length} of ${topRight.length} active.\n• Plot custom prospect call drivers live or clear the canvas for a clean discovery workshop.`;
     },
   },
   {
@@ -105,15 +110,15 @@ const TOUR_STEPS: {
     tab: 'scoping',
     title: 'Step 3 of 4 · Partner Deal-Scoping & SOW Guardrails',
     summary: ({ hlee, preset }) =>
-      `Converts Radar scope and architecture complexity into a fixed-scope SOW estimate.\n\nWhat you can tweak here:\n• Partner GTM Motion (CCaaS Co-Sell, GSI, or BPO) to tailor the co-sell hook & RACI split.\n• Deployment Sovereignty (OCP SaaS vs. Bare Metal +3 wks/+12 PS days).\n• Phase 1 Bounded Intents slider and Backend API Readiness (Modern, Mixed SOAP, or Mainframe +2 wks/+8 PS days).\n\nLive estimate: ${hlee.timelineLabel} (${hlee.psEffortLabel}) under ${preset.compliance.slice(0, 3).join(', ')}.`,
+      `Converts Radar scope and architecture complexity into a fixed-scope SOW estimate.\n\nWhat you can tweak here:\n• Partner GTM Motion (CCaaS Co-Sell, GSI, or BPO) to tailor the co-sell hook & RACI split.\n• Deployment Sovereignty (OCP SaaS vs. Bare Metal +3 wks/+12 PS days) and Backend API Readiness.\n• PS Blended Day Rate ($/Day) to feed true implementation cost & break-even payback back into Unit Economics.\n\nLive estimate: ${hlee.timelineLabel} (${hlee.psEffortLabel}) under ${preset.compliance.slice(0, 3).join(', ')}.`,
   },
   {
     step: 4,
     tab: 'mcp',
-    title: 'Step 4 of 4 · Live MCP Protocol & Glass Box Inspector',
+    title: 'Step 4 of 4 · Live MCP Protocol & Call Turn Replay',
     summary: ({ preset }) => {
       const maxMs = Math.max(...preset.mcpSystems.map((s) => s.ms));
-      return `Demonstrates OCP as MCP Client calling customer-hosted MCP servers with Zero Frontier Egress.\n\nWhat you can tweak here:\n• Toggle Localhost HTTP Bridge (:3333/mcp) vs. Embedded JSON-RPC 2.0 runtime.\n• Run any of the 5 JSON-RPC actions to inspect real payloads synced to your live ROI & Radar inputs.\n• Compare the ${maxMs + 42}ms Parallel Async MCP + Lexis TTS path against the 1,200ms caller hang-up threshold, or download the TypeScript MCP server.`;
+      return `Demonstrates OCP as MCP Client calling customer-hosted MCP servers with Zero Frontier Egress.\n\nWhat you can tweak here:\n• Click "Simulate Call Turn" to replay an end-to-end vertical turn (8kHz ASR → Parallel MCP → Lexis <45ms TTS → UUI Handoff).\n• Toggle Localhost HTTP Bridge (:3333/mcp) vs. Embedded JSON-RPC 2.0 runtime and trigger all 5 JSON-RPC actions.\n• Compare the ${maxMs + 42}ms Omilia path against the 1,200ms hang-up line, or download the TypeScript MCP server.`;
     },
   },
 ];
@@ -127,6 +132,8 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   partnerMotion,
   sovereignty,
   apiReadiness,
+  psDayRate,
+  payback,
   hlee,
   onSelectTab,
   onChangeVertical,
@@ -134,6 +141,8 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   onChangeSovereignty,
   onAddCustomUseCase,
   onOpenBrief,
+  onOpenScenarios,
+  onDownloadCsv,
   onOpenTsModal,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -317,16 +326,31 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       keywords: ['fte', 'ftes', 'agents', 'auto-fit', 'autofit', 'shift', 'work days', 'capacity'],
     },
     {
+      id: 'cashflowPayback',
+      tab: 'economics',
+      tabLabel: 'Unit Economics',
+      name: '36-Month Cash Flow, Payback & Sensitivity Matrix',
+      currentValue:
+        payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} mo payback` : 'N/A',
+      whatItDoes:
+        'Plots cumulative 36-month spend including upfront Phase 1 PS investment and adds a ±10% Containment Sensitivity view alongside CFO Breakdown.',
+      whyItMatters:
+        'Answers two top CFO objections in one click: exact months to recover Phase 1 implementation spend and downside protection if containment lands 10% below target.',
+      keywords: ['payback', 'cash flow', 'cashflow', 'break-even', 'breakeven', 'sensitivity', '36-month'],
+      actionLabel: 'Open Unit Economics',
+      onAction: () => onSelectTab('economics'),
+    },
+    {
       id: 'radarPins',
       tab: 'radar',
       tabLabel: 'AI Radar',
-      name: 'Radar Pins & Phase 1 SOW Checkboxes',
+      name: 'Draggable Radar Pins, Score Sliders & SOW Checkboxes',
       currentValue: `${includedCount}/${topRightCount} Top-Right included`,
       whatItDoes:
-        'Clicking a pin inspects its Runtime Tier, Training Wheels rollout, and Governance Gate. Checking/unchecking Top-Right items (≥50F, ≥50I) updates Phase 1 Deal Scoping.',
+        'Drag any pin on the 2×2 matrix—or tweak Feasibility & Impact sliders inside the Inspector—to move workflows between Phase 1 and Phase 2 and recompute HLEE PS Days.',
       whyItMatters:
-        'Enforces strict 80/20 discipline: low-feasibility or mainframe-blocked intents stay in Phase 2/3 so Phase 1 launches on time and on budget.',
-      keywords: ['radar', 'pin', 'quadrant', 'checkbox', 'phase 1', 'training wheels', 'runtime'],
+        'Enforces strict 80/20 discipline live with stakeholders: if a prospect reveals a legacy dependency mid-meeting, dragging Feasibility below 50 defers it out of Phase 1 SOW automatically.',
+      keywords: ['radar', 'pin', 'drag', 'quadrant', 'checkbox', 'phase 1', 'training wheels', 'runtime', 'rescore'],
       actionLabel: 'Open AI Radar',
       onAction: () => onSelectTab('radar'),
     },
@@ -382,13 +406,13 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       id: 'intentSlider',
       tab: 'scoping',
       tabLabel: 'Deal Scoping',
-      name: 'Phase 1 Bounded Intents Slider',
-      currentValue: `${includedCount} Intents (${hlee.timelineLabel} / ${hlee.psEffortLabel})`,
+      name: 'Phase 1 Bounded Intents & PS Blended Day Rate',
+      currentValue: `${includedCount} Intents · $${psDayRate.toLocaleString()}/d`,
       whatItDoes:
-        'Adjusts how many Top-Right Radar intents are active in Phase 1 (8 base PS days + 2–3 PS days per intent; timeline = 2 + ceil(ucPsDays / 3.5) weeks).',
+        'Adjusts active Top-Right Radar intents (8 base PS days + 2–3 PS days per intent) and prices PS Days using your Blended Day Rate.',
       whyItMatters:
-        'Provides an instant, transparent HLEE effort and timeline slider during commercial scoping negotiations.',
-      keywords: ['bounded intents', 'intent count', 'hlee', 'ps days', 'timeline', 'weeks', 'sow'],
+        'Feeds total upfront implementation dollars back into Unit Economics so Break-Even Payback and 36-month cash flow reflect true partner services pricing.',
+      keywords: ['bounded intents', 'intent count', 'hlee', 'ps days', 'ps rate', 'day rate', 'timeline', 'weeks', 'sow'],
     },
     {
       id: 'apiReadiness',
@@ -406,15 +430,29 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       id: 'mcpBridge',
       tab: 'mcp',
       tabLabel: 'MCP Inspector',
-      name: 'Localhost HTTP Bridge & 5 RPC Actions',
+      name: 'Live Call Turn Replay, Localhost Bridge & RPC Actions',
       currentValue: `${maxParallelMs + 42}ms Omilia total`,
       whatItDoes:
-        'Switches between Embedded JSON-RPC 2.0 runtime and http://localhost:3333/mcp, executing live tool calls synced to your ROI & Radar state.',
+        'Simulates an end-to-end voice turn (ASR → Parallel MCP → Lexis TTS → UUI Handoff) alongside Embedded JSON-RPC 2.0 or http://localhost:3333/mcp tool calls.',
       whyItMatters:
         'Proves sub-300ms parallel MCP fan-out + Lexis TTS (<45ms) well under the 1,200ms caller hang-up threshold—with Zero Frontier Egress.',
-      keywords: ['mcp', 'localhost', 'bridge', '3333', 'waterfall', 'latency', '1200', '300ms', 'lexis', 'json-rpc', 'typescript'],
+      keywords: ['mcp', 'localhost', 'bridge', '3333', 'waterfall', 'latency', '1200', '300ms', 'lexis', 'json-rpc', 'typescript', 'replay', 'call turn', 'uui'],
       actionLabel: 'Open MCP Inspector',
       onAction: () => onSelectTab('mcp'),
+    },
+    {
+      id: 'scenariosCsv',
+      tab: 'economics',
+      tabLabel: 'Global',
+      name: 'Shareable Scenario URLs, Saved Deals & CSV Export',
+      currentValue: `${formatCurrencyCompact(payback.implementationCost)} PS · Ready`,
+      whatItDoes:
+        'Encodes full workbench state into a shareable ?s= link, saves named deal profiles in localStorage, adds prospect/partner metadata in Deal Brief, and exports a full .csv workbook.',
+      whyItMatters:
+        'Enables champions, SEs, and CFO reviewers to reopen exact deal models, compare accounts, and audit all numbers inside Excel.',
+      keywords: ['share', 'url', 'link', 'save', 'profile', 'scenario', 'csv', 'metadata', 'prospect', 'export'],
+      actionLabel: 'Open Scenarios',
+      onAction: onOpenScenarios,
     },
   ];
 
@@ -567,20 +605,29 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       return { text, actions };
     }
 
-    // D. Export / Brief / Print
-    if (q.includes('export') || q.includes('brief') || q.includes('pdf') || q.includes('print')) {
+    // D. Export / Brief / Print / Scenarios / CSV
+    if (
+      q.includes('export') ||
+      q.includes('brief') ||
+      q.includes('pdf') ||
+      q.includes('print') ||
+      q.includes('csv') ||
+      q.includes('share') ||
+      q.includes('scenario')
+    ) {
       return {
-        text: `Export Deal Brief combines your live Unit Economics KPIs, active Top-Right Phase 1 Radar intents, and Partner SOW Guardrails into a copyable text dossier.\n\nUse "Print Report" in the workspace bar for a formatted landscape PDF across your active view.`,
+        text: `You can share scenarios via URL (?s=...), save named deal profiles locally in the Scenarios modal, add Prospect/Partner/CCaaS metadata inside Executive Deal Brief, and download a full .csv model for Excel or CFO review.`,
         actions: [
           { label: 'Open Executive Deal Brief', onClick: onOpenBrief },
-          { label: 'Print / Save PDF', onClick: () => window.print() },
+          { label: 'Save / Share Scenarios', onClick: onOpenScenarios },
+          { label: 'Download CSV Model', onClick: onDownloadCsv },
         ],
       };
     }
 
     // E. Fallback: Helpful guide + quick path to Controls & Why
     return {
-      text: `I can walk you through the 4 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "Why tweak surge?", "What is CFO Override?", "How does Bare Metal affect PS Days?") or open the Controls & Why reference tab above.`,
+      text: `I can walk you through the 4 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "Why tweak surge?", "How is payback calculated?", "Can I drag Radar pins?", or "How do Scenarios & CSV work?") or open the Controls & Why reference tab above.`,
       actions: [
         { label: 'Start 4-Step Tour', onClick: () => runTourStep(1) },
         {
@@ -608,23 +655,23 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   const contextPrompts: Record<TabKey, string[]> = {
     economics: [
       'Explain every control on economics',
+      'How do payback & cash flow work?',
       'Why tweak surge & DIY LLM?',
-      'What is CFO Override & Auto-Fit?',
     ],
     radar: [
       'Explain every control on radar',
-      'How do quadrants affect Phase 1?',
+      'How does pin dragging affect SOW?',
       'Plot a custom prospect driver',
     ],
     scoping: [
       'Explain every control on scoping',
-      'How are PS Days & HLEE calculated?',
+      'How do PS Days & Day Rate link to ROI?',
       'Why does Bare Metal add 3 weeks?',
     ],
     mcp: [
       'Explain every control on mcp',
+      'How does Call Turn Replay work?',
       'Why does <300ms MCP matter?',
-      'How does Localhost Bridge work?',
     ],
   };
 

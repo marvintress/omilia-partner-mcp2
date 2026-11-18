@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Copy, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react';
 import { UseCase, VerticalPreset } from '../data/verticalPresets';
 import { getQuadrantMeta, isTopRightQuadrant } from '../utils/calculations';
@@ -10,6 +10,7 @@ interface AiRadarTabProps {
   selectedId: string | null;
   onSelectUseCase: (id: string) => void;
   onToggleInclude: (id: string) => void;
+  onUpdateUseCaseScores: (id: string, feas: number, imp: number) => void;
   onDeleteUseCase: (id: string) => void;
   onAddCustomUseCase: (name: string, feas: number, imp: number) => void;
   onClearAll: () => void;
@@ -25,6 +26,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
   selectedId,
   onSelectUseCase,
   onToggleInclude,
+  onUpdateUseCaseScores,
   onDeleteUseCase,
   onAddCustomUseCase,
   onClearAll,
@@ -36,6 +38,8 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
   const [customImp, setCustomImp] = useState(84);
   const [filter, setFilter] = useState<PortfolioFilter>('all');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   const selectedUc = useCases.find((u) => u.id === selectedId) ?? useCases[0] ?? null;
 
@@ -89,6 +93,21 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
 
   const includedCount = useCases.filter((u) => isTopRightQuadrant(u) && u.included !== false).length;
 
+  const clientToScores = (clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const svgX = ((clientX - rect.left) / rect.width) * W;
+    const svgY = ((clientY - rect.top) / rect.height) * H;
+    const rawFeas = Math.round(((svgX - padL) / plotW) * 100);
+    const rawImp = Math.round(100 - ((svgY - padT) / plotH) * 100);
+    return {
+      feas: Math.min(99, Math.max(5, rawFeas)),
+      imp: Math.min(99, Math.max(5, rawImp)),
+    };
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -101,7 +120,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   AI Radar 2.0: Feasibility &amp; Data Maturity vs. Strategic Impact
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {preset.name} · {useCases.length} plotted ({includedCount} in Phase 1 SOW)
+                  {preset.name} · {useCases.length} plotted ({includedCount} in Phase 1 SOW) · Drag pins to re-score
                 </p>
               </div>
               <div className="no-print flex items-center gap-2 shrink-0">
@@ -126,8 +145,9 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
             {/* Interactive SVG 2x2 Matrix */}
             <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950">
               <svg
+                ref={svgRef}
                 viewBox={`0 0 ${W} ${H}`}
-                className="block w-full h-auto select-none"
+                className="block w-full h-auto select-none touch-none"
                 role="img"
                 aria-label="AI Radar 2.0 2x2 use case prioritization matrix"
               >
@@ -264,13 +284,36 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   const anchor = alignRight ? 'end' : 'start';
                   const shortLabel = uc.name.length > 26 ? `${uc.name.slice(0, 24)}…` : uc.name;
 
+                  const isDraggingThis = draggingId === uc.id;
+
                   return (
                     <g
                       key={uc.id}
-                      onClick={() => onSelectUseCase(uc.id)}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        setDraggingId(uc.id);
+                        onSelectUseCase(uc.id);
+                      }}
+                      onPointerMove={(e) => {
+                        if (draggingId !== uc.id) return;
+                        const nextScores = clientToScores(e.clientX, e.clientY);
+                        if (nextScores && (nextScores.feas !== uc.feas || nextScores.imp !== uc.imp)) {
+                          onUpdateUseCaseScores(uc.id, nextScores.feas, nextScores.imp);
+                        }
+                      }}
+                      onPointerUp={(e) => {
+                        if (draggingId === uc.id) {
+                          e.currentTarget.releasePointerCapture(e.pointerId);
+                          setDraggingId(null);
+                        }
+                      }}
+                      onPointerCancel={() => {
+                        if (draggingId === uc.id) setDraggingId(null);
+                      }}
                       onMouseEnter={() => setHoveredId(uc.id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: isDraggingThis ? 'grabbing' : 'grab' }}
                       opacity={isExcluded ? 0.5 : 1}
                     >
                       {isSelected && (
@@ -287,7 +330,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                       <circle
                         cx={cx}
                         cy={cy}
-                        r={isSelected || isHovered ? 8.5 : 7}
+                        r={isSelected || isHovered || isDraggingThis ? 8.5 : 7}
                         fill={color}
                         className="stroke-white dark:stroke-slate-900"
                         strokeWidth="2"
@@ -310,7 +353,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                             : 'fill-slate-700 dark:fill-slate-300 font-medium'
                         }`}
                       >
-                        {shortLabel}
+                        {isDraggingThis ? `${shortLabel} (${uc.feas}F/${uc.imp}I)` : shortLabel}
                       </text>
                     </g>
                   );
@@ -471,6 +514,61 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   <p className="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
                     {selectedUc.desc}
                   </p>
+                </div>
+
+                {/* Live Score Sliders (Synced with Pin Dragging & HLEE Scoping) */}
+                <div className="no-print grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
+                        Feasibility
+                        <InfoTooltip
+                          label="Live Feasibility Rescore"
+                          description="Move slider or drag pin horizontally. Crossing ≥50F & ≥50I moves driver into Phase 1 SOW and updates HLEE PS Days."
+                          tcoImpact="Scores ≥75F reduce delivery complexity (+2 PS Days vs. +3 PS Days for 50–74F)."
+                        />
+                      </span>
+                      <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                        {selectedUc.feas}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      aria-label={`Feasibility score for ${selectedUc.name}`}
+                      min={5}
+                      max={99}
+                      value={selectedUc.feas}
+                      onChange={(e) =>
+                        onUpdateUseCaseScores(selectedUc.id, Number(e.target.value), selectedUc.imp)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
+                        Impact
+                        <InfoTooltip
+                          label="Live Impact Rescore"
+                          description="Move slider or drag pin vertically to re-evaluate call volume and CX upside during discovery."
+                          tcoImpact="High-impact drivers placed in Immediate Funding prioritize containment capture in Phase 1."
+                          align="right"
+                        />
+                      </span>
+                      <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                        {selectedUc.imp}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      aria-label={`Impact score for ${selectedUc.name}`}
+                      min={5}
+                      max={99}
+                      value={selectedUc.imp}
+                      onChange={(e) =>
+                        onUpdateUseCaseScores(selectedUc.id, selectedUc.feas, Number(e.target.value))
+                      }
+                    />
+                  </div>
                 </div>
 
                 <dl className="divide-y divide-slate-100 border-t border-slate-100 text-xs dark:divide-slate-800 dark:border-slate-800">

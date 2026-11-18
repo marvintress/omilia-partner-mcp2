@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, Code2, Copy, Play } from 'lucide-react';
 import {
   ApiReadiness,
+  CALL_TURN_SCENARIOS,
   PartnerMotion,
   SovereigntyTier,
   UseCase,
@@ -53,13 +54,45 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
   const [reqJson, setReqJson] = useState('');
   const [resJson, setResJson] = useState('');
   const [copiedPane, setCopiedPane] = useState<'req' | 'res' | null>(null);
+  const [replayStage, setReplayStage] = useState<number>(4);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const replayTimersRef = useRef<number[]>([]);
 
+  const scenario = CALL_TURN_SCENARIOS[preset.key];
   const maxParallelMs = Math.max(...preset.mcpSystems.map((s) => s.ms));
   const lexisTtsMs = 42;
   const totalOmiliaMs = maxParallelMs + lexisTtsMs;
   const seqSumMs = preset.mcpSystems.reduce((acc, s) => acc + s.ms, 0) + 640 + 210;
   const scaleMax = Math.max(seqSumMs, 1500);
   const thresholdPct = (1200 / scaleMax) * 100;
+
+  const clearReplayTimers = () => {
+    replayTimersRef.current.forEach((id) => window.clearTimeout(id));
+    replayTimersRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => clearReplayTimers();
+  }, []);
+
+  useEffect(() => {
+    clearReplayTimers();
+    setIsReplaying(false);
+    setReplayStage(4);
+  }, [preset.key]);
+
+  const handleSimulateCallTurn = () => {
+    clearReplayTimers();
+    setIsReplaying(true);
+    setReplayStage(1);
+    const t1 = window.setTimeout(() => setReplayStage(2), 380);
+    const t2 = window.setTimeout(() => setReplayStage(3), 820);
+    const t3 = window.setTimeout(() => {
+      setReplayStage(4);
+      setIsReplaying(false);
+    }, 1240);
+    replayTimersRef.current = [t1, t2, t3];
+  };
 
   const executeRpc = async (action: RpcAction, nextId: number) => {
     setActiveAction(action);
@@ -546,6 +579,129 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
                   <span className="font-mono tabular-nums">({sys.ms}ms)</span>
                 </span>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Interactive End-to-End Live Call Turn Replay */}
+        <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
+            <div>
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                End-to-End Live Call Turn Replay
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {scenario.intentName} · {totalOmiliaMs}ms Omilia vs. {seqSumMs.toLocaleString()}ms DIY LLM
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSimulateCallTurn}
+              className="no-print inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 cursor-pointer whitespace-nowrap"
+            >
+              <Play className="h-3.5 w-3.5" />
+              {isReplaying ? 'Replaying Turn...' : 'Simulate Call Turn'}
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3 text-xs">
+            {/* Stage 1: Caller ASR */}
+            <div
+              className={`rounded-lg border p-3.5 transition-opacity duration-200 ${
+                replayStage >= 1
+                  ? 'border-slate-200 bg-slate-50/70 opacity-100 dark:border-slate-800 dark:bg-slate-950/60'
+                  : 'border-slate-100 opacity-35 dark:border-slate-800/50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="font-mono text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  01 · CALLER SPEECH CAPTURE
+                </span>
+                <span className="font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
+                  {scenario.asrTokens}
+                </span>
+              </div>
+              <p className="font-medium text-slate-900 dark:text-slate-100">
+                {scenario.callerUtterance}
+              </p>
+            </div>
+
+            {/* Stage 2: Parallel MCP Fan-Out */}
+            <div
+              className={`rounded-lg border p-3.5 transition-opacity duration-200 ${
+                replayStage >= 2
+                  ? 'border-slate-200 bg-slate-50/70 opacity-100 dark:border-slate-800 dark:bg-slate-950/60'
+                  : 'border-slate-100 opacity-35 dark:border-slate-800/50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="font-mono text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+                  02 · PARALLEL ASYNC MCP FAN-OUT
+                </span>
+                <span className="font-mono text-[11px] font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                  Resolved in {maxParallelMs}ms concurrent
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {scenario.systemPayloads.map((item, idx) => {
+                  const msVal = preset.mcpSystems[idx]?.ms ?? maxParallelMs;
+                  return (
+                    <div
+                      key={item.system}
+                      className="flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-200/70 pt-1.5 first:border-t-0 first:pt-0 dark:border-slate-800"
+                    >
+                      <span className="font-medium text-slate-800 dark:text-slate-200">
+                        {item.system}{' '}
+                        <span className="font-mono text-[10.5px] tabular-nums text-slate-500">
+                          ({msVal}ms)
+                        </span>
+                      </span>
+                      <span className="font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                        {item.result}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Stage 3: Lexis Native TTS Reply */}
+            <div
+              className={`rounded-lg border p-3.5 transition-opacity duration-200 ${
+                replayStage >= 3
+                  ? 'border-teal-200 bg-teal-50/50 opacity-100 dark:border-teal-900/60 dark:bg-teal-950/30'
+                  : 'border-slate-100 opacity-35 dark:border-slate-800/50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  03 · LEXIS NATIVE TTS REPLY
+                </span>
+                <span className="font-mono text-[11px] font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  +42ms TTS ({totalOmiliaMs}ms total loop)
+                </span>
+              </div>
+              <p className="font-medium text-slate-900 dark:text-slate-100">
+                {scenario.omiliaReply}
+              </p>
+            </div>
+
+            {/* Stage 4: Warm Transfer UUI */}
+            <div
+              className={`rounded-lg border p-3 transition-opacity duration-200 ${
+                replayStage >= 4
+                  ? 'border-slate-200 bg-slate-50 opacity-100 dark:border-slate-800 dark:bg-slate-950'
+                  : 'border-slate-100 opacity-35 dark:border-slate-800/50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="font-mono text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">
+                  04 · SIP / UUI WARM HANDOFF CONTEXT (IF ESCALATED TO COPILOT)
+                </span>
+              </div>
+              <code className="block font-mono text-[11px] text-slate-700 dark:text-slate-300 break-all">
+                {scenario.uuiHandoffSummary}
+              </code>
             </div>
           </div>
         </section>

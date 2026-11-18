@@ -8,6 +8,7 @@ import { AiRadarTab } from './components/AiRadarTab';
 import { DealBriefModal } from './components/DealBriefModal';
 import { DealScopingTab } from './components/DealScopingTab';
 import { McpInspectorTab } from './components/McpInspectorTab';
+import { ScenariosModal } from './components/ScenariosModal';
 import { TabKey, TopBar } from './components/TopBar';
 import { TsServerModal } from './components/TsServerModal';
 import { UnitEconomicsTab } from './components/UnitEconomicsTab';
@@ -15,6 +16,7 @@ import { WorkbenchGuideWidget } from './components/WorkbenchGuideWidget';
 import { WorkspaceBar } from './components/WorkspaceBar';
 import {
   ApiReadiness,
+  DealMetadata,
   PartnerMotion,
   SovereigntyTier,
   UseCase,
@@ -23,14 +25,27 @@ import {
   VerticalPreset,
 } from './data/verticalPresets';
 import {
+  buildDealCsv,
   buildExecutiveDealBrief,
   calculateHlee,
   calculateUnitEconomics,
   computeFittedAgents,
+  computePaybackAndCashFlow,
+  computeSensitivityScenarios,
   formatCurrencyCompact,
   isTopRightQuadrant,
   RoiInputs,
 } from './utils/calculations';
+import {
+  clearScenarioUrlParam,
+  decodeScenarioFromUrl,
+  deleteDealProfile,
+  encodeScenarioToUrl,
+  loadSavedDeals,
+  SavedDealProfile,
+  saveDealProfile,
+  ScenarioPayload,
+} from './utils/scenarioStorage';
 
 function buildDefaultUseCases(preset: VerticalPreset): UseCase[] {
   return preset.useCases.map((u, idx) => ({
@@ -66,6 +81,13 @@ function buildDefaultRoiInputs(preset: VerticalPreset): RoiInputs {
   };
 }
 
+const DEFAULT_DEAL_META: DealMetadata = {
+  prospectName: '',
+  partnerName: '',
+  ccaasPlatform: '',
+  dealOwner: '',
+};
+
 const MOTION_LABELS: Record<PartnerMotion, string> = {
   ccaas: 'CCaaS Co-Sell (Genesys Cloud / NICE CXone / AWS Connect)',
   gsi: 'Global Systems Integrator (Accenture / Deloitte / Cognizant)',
@@ -78,42 +100,79 @@ const SOVEREIGNTY_LABELS: Record<SovereigntyTier, string> = {
 };
 
 export default function App() {
-  const [vertical, setVertical] = useState<VerticalKey>('banking');
+  const [urlSeed] = useState<ScenarioPayload | null>(() => {
+    const decoded = decodeScenarioFromUrl();
+    if (decoded && VERTICAL_PRESETS[decoded.vertical]) {
+      return decoded;
+    }
+    return null;
+  });
+
+  const [vertical, setVertical] = useState<VerticalKey>(() => urlSeed?.vertical ?? 'banking');
   const [activeTab, setActiveTab] = useState<TabKey>('economics');
   const [isDark, setIsDark] = useState<boolean>(false);
 
-  const [roiByVertical, setRoiByVertical] = useState<Record<VerticalKey, RoiInputs>>(() => ({
-    banking: buildDefaultRoiInputs(VERTICAL_PRESETS.banking),
-    utilities: buildDefaultRoiInputs(VERTICAL_PRESETS.utilities),
-    insurance: buildDefaultRoiInputs(VERTICAL_PRESETS.insurance),
-    healthcare: buildDefaultRoiInputs(VERTICAL_PRESETS.healthcare),
-    telecom: buildDefaultRoiInputs(VERTICAL_PRESETS.telecom),
-  }));
-
-  const [useCasesByVertical, setUseCasesByVertical] = useState<Record<VerticalKey, UseCase[]>>(() => ({
-    banking: buildDefaultUseCases(VERTICAL_PRESETS.banking),
-    utilities: buildDefaultUseCases(VERTICAL_PRESETS.utilities),
-    insurance: buildDefaultUseCases(VERTICAL_PRESETS.insurance),
-    healthcare: buildDefaultUseCases(VERTICAL_PRESETS.healthcare),
-    telecom: buildDefaultUseCases(VERTICAL_PRESETS.telecom),
-  }));
-
-  const [selectedUcByVertical, setSelectedUcByVertical] = useState<Record<VerticalKey, string | null>>({
-    banking: 'banking-uc-0',
-    utilities: 'utilities-uc-0',
-    insurance: 'insurance-uc-0',
-    healthcare: 'healthcare-uc-0',
-    telecom: 'telecom-uc-0',
+  const [roiByVertical, setRoiByVertical] = useState<Record<VerticalKey, RoiInputs>>(() => {
+    const base: Record<VerticalKey, RoiInputs> = {
+      banking: buildDefaultRoiInputs(VERTICAL_PRESETS.banking),
+      utilities: buildDefaultRoiInputs(VERTICAL_PRESETS.utilities),
+      insurance: buildDefaultRoiInputs(VERTICAL_PRESETS.insurance),
+      healthcare: buildDefaultRoiInputs(VERTICAL_PRESETS.healthcare),
+      telecom: buildDefaultRoiInputs(VERTICAL_PRESETS.telecom),
+    };
+    if (urlSeed && VERTICAL_PRESETS[urlSeed.vertical]) {
+      base[urlSeed.vertical] = urlSeed.inputs;
+    }
+    return base;
   });
 
-  const [partnerMotion, setPartnerMotion] = useState<PartnerMotion>('ccaas');
-  const [sovereignty, setSovereignty] = useState<SovereigntyTier>('saas');
-  const [apiReadiness, setApiReadiness] = useState<ApiReadiness>('modern');
+  const [useCasesByVertical, setUseCasesByVertical] = useState<Record<VerticalKey, UseCase[]>>(() => {
+    const base: Record<VerticalKey, UseCase[]> = {
+      banking: buildDefaultUseCases(VERTICAL_PRESETS.banking),
+      utilities: buildDefaultUseCases(VERTICAL_PRESETS.utilities),
+      insurance: buildDefaultUseCases(VERTICAL_PRESETS.insurance),
+      healthcare: buildDefaultUseCases(VERTICAL_PRESETS.healthcare),
+      telecom: buildDefaultUseCases(VERTICAL_PRESETS.telecom),
+    };
+    if (urlSeed && VERTICAL_PRESETS[urlSeed.vertical] && Array.isArray(urlSeed.useCases)) {
+      base[urlSeed.vertical] = urlSeed.useCases;
+    }
+    return base;
+  });
+
+  const [selectedUcByVertical, setSelectedUcByVertical] = useState<Record<VerticalKey, string | null>>(() => ({
+    banking:
+      urlSeed?.vertical === 'banking' ? urlSeed.useCases[0]?.id ?? null : 'banking-uc-0',
+    utilities:
+      urlSeed?.vertical === 'utilities' ? urlSeed.useCases[0]?.id ?? null : 'utilities-uc-0',
+    insurance:
+      urlSeed?.vertical === 'insurance' ? urlSeed.useCases[0]?.id ?? null : 'insurance-uc-0',
+    healthcare:
+      urlSeed?.vertical === 'healthcare' ? urlSeed.useCases[0]?.id ?? null : 'healthcare-uc-0',
+    telecom:
+      urlSeed?.vertical === 'telecom' ? urlSeed.useCases[0]?.id ?? null : 'telecom-uc-0',
+  }));
+
+  const [partnerMotion, setPartnerMotion] = useState<PartnerMotion>(
+    () => urlSeed?.partnerMotion ?? 'ccaas'
+  );
+  const [sovereignty, setSovereignty] = useState<SovereigntyTier>(
+    () => urlSeed?.sovereignty ?? 'saas'
+  );
+  const [apiReadiness, setApiReadiness] = useState<ApiReadiness>(
+    () => urlSeed?.apiReadiness ?? 'modern'
+  );
+  const [psDayRate, setPsDayRate] = useState<number>(() => urlSeed?.psDayRate ?? 1800);
+  const [dealMeta, setDealMeta] = useState<DealMetadata>(() => urlSeed?.dealMeta ?? DEFAULT_DEAL_META);
+  const [savedDeals, setSavedDeals] = useState<SavedDealProfile[]>(() => loadSavedDeals());
 
   const [briefModalOpen, setBriefModalOpen] = useState(false);
   const [briefCopied, setBriefCopied] = useState(false);
   const [tsModalOpen, setTsModalOpen] = useState(false);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [scenariosModalOpen, setScenariosModalOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(() =>
+    urlSeed ? `Loaded shared ${VERTICAL_PRESETS[urlSeed.vertical].shortName} scenario from URL` : null
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -146,6 +205,16 @@ export default function App() {
     [preset, includedUseCases, partnerMotion, sovereignty, apiReadiness]
   );
 
+  const payback = useMemo(
+    () => computePaybackAndCashFlow(roiResults, hlee.psDays, psDayRate),
+    [roiResults, hlee.psDays, psDayRate]
+  );
+
+  const sensitivity = useMemo(
+    () => computeSensitivityScenarios(inputs, preset, hlee.psDays, psDayRate),
+    [inputs, preset, hlee.psDays, psDayRate]
+  );
+
   const briefText = useMemo(
     () =>
       buildExecutiveDealBrief({
@@ -156,9 +225,24 @@ export default function App() {
         motionLabel: MOTION_LABELS[partnerMotion],
         sovereigntyLabel: SOVEREIGNTY_LABELS[sovereignty],
         hlee,
+        psDayRate,
+        payback,
+        dealMeta,
       }),
-    [preset, inputs, roiResults, includedUseCases, partnerMotion, sovereignty, hlee]
+    [preset, inputs, roiResults, includedUseCases, partnerMotion, sovereignty, hlee, psDayRate, payback, dealMeta]
   );
+
+  const buildCurrentPayload = (): ScenarioPayload => ({
+    v: 1,
+    vertical,
+    inputs,
+    useCases,
+    partnerMotion,
+    sovereignty,
+    apiReadiness,
+    psDayRate,
+    dealMeta,
+  });
 
   const handleChangeVertical = (next: VerticalKey) => {
     setVertical(next);
@@ -172,6 +256,13 @@ export default function App() {
         ...prev[vertical],
         [key]: val,
       },
+    }));
+  };
+
+  const handleUpdateDealMeta = <K extends keyof DealMetadata>(key: K, val: DealMetadata[K]) => {
+    setDealMeta((prev) => ({
+      ...prev,
+      [key]: val,
     }));
   };
 
@@ -195,6 +286,7 @@ export default function App() {
   };
 
   const handleResetVerticalRoi = () => {
+    clearScenarioUrlParam();
     setRoiByVertical((prev) => ({
       ...prev,
       [vertical]: buildDefaultRoiInputs(preset),
@@ -210,6 +302,29 @@ export default function App() {
         const nextIncluded = uc.included === false;
         notify(nextIncluded ? `Included "${uc.name}" in Phase 1 SOW` : `Excluded "${uc.name}" from Phase 1 SOW`);
         return { ...uc, included: nextIncluded };
+      }),
+    }));
+  };
+
+  const handleUpdateUseCaseScores = (id: string, feas: number, imp: number) => {
+    setUseCasesByVertical((prev) => ({
+      ...prev,
+      [vertical]: prev[vertical].map((uc) => {
+        if (uc.id !== id) return uc;
+        const wasTopRight = isTopRightQuadrant(uc);
+        const isNowTopRight = feas >= 50 && imp >= 50;
+        let nextIncluded = uc.included;
+        if (isNowTopRight && !wasTopRight) {
+          nextIncluded = true;
+        } else if (!isNowTopRight) {
+          nextIncluded = false;
+        }
+        return {
+          ...uc,
+          feas,
+          imp,
+          included: nextIncluded,
+        };
       }),
     }));
   };
@@ -314,15 +429,85 @@ export default function App() {
     }
   };
 
+  const handleCopyShareLink = async () => {
+    const url = encodeScenarioToUrl(buildCurrentPayload());
+    try {
+      await navigator.clipboard.writeText(url);
+      notify('Copied shareable scenario link to clipboard');
+    } catch {
+      window.history.replaceState({}, '', url);
+      notify('Updated address bar with shareable scenario URL');
+    }
+  };
+
+  const handleSaveDeal = (name: string) => {
+    const next = saveDealProfile(name, buildCurrentPayload());
+    setSavedDeals(next);
+    notify(`Saved deal snapshot "${name}"`);
+  };
+
+  const handleLoadDeal = (deal: SavedDealProfile) => {
+    const p = deal.payload;
+    if (!VERTICAL_PRESETS[p.vertical]) return;
+    setVertical(p.vertical);
+    setRoiByVertical((prev) => ({ ...prev, [p.vertical]: p.inputs }));
+    setUseCasesByVertical((prev) => ({ ...prev, [p.vertical]: p.useCases }));
+    setSelectedUcByVertical((prev) => ({ ...prev, [p.vertical]: p.useCases[0]?.id ?? null }));
+    setPartnerMotion(p.partnerMotion);
+    setSovereignty(p.sovereignty);
+    setApiReadiness(p.apiReadiness);
+    setPsDayRate(p.psDayRate || 1800);
+    setDealMeta(p.dealMeta ?? DEFAULT_DEAL_META);
+    notify(`Loaded deal "${deal.name}"`);
+  };
+
+  const handleDeleteDeal = (id: string) => {
+    const next = deleteDealProfile(id);
+    setSavedDeals(next);
+    notify('Deleted saved deal profile');
+  };
+
+  const handleDownloadCsv = () => {
+    const csv = buildDealCsv({
+      preset,
+      inputs,
+      results: roiResults,
+      useCases,
+      hlee,
+      psDayRate,
+      payback,
+      sensitivity,
+      dealMeta,
+    });
+    const slug = (dealMeta.prospectName || preset.shortName)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `omilia-deal-model-${slug || 'export'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify('Downloaded Excel-ready CSV deal model');
+  };
+
   const handleCopyTcoSummary = async () => {
     const tcoSummary = [
       `OMILIA UNIT ECONOMICS & TCO SUMMARY — ${preset.name.toUpperCase()}`,
+      dealMeta.prospectName ? `Prospect: ${dealMeta.prospectName}` : null,
       `Monthly Inbound Calls: ${inputs.callVolume.toLocaleString()} (${inputs.surge.toFixed(1)}x surge = ${Math.round(roiResults.effectiveMonthlyCalls).toLocaleString()} calls/mo)`,
       `Containment: ${Math.round(roiResults.baseCont * 100)}% Baseline -> ${Math.round(roiResults.targetCont * 100)}% Omilia (+${roiResults.containmentLiftPct}% Lift)`,
       `Annual Net Savings: ${formatCurrencyCompact(roiResults.annualNetSavings)} | 3-Year vs. DIY LLM: ${formatCurrencyCompact(roiResults.threeYearDiySavings)}`,
+      `Break-Even Payback: ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/d)`,
       `Capacity Reclaimed: ${roiResults.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(roiResults.ftesFreed).toLocaleString()} FTEs freed)`,
       `Annual TCO: Legacy ${formatCurrencyCompact(roiResults.annualLegacy)} | DIY LLM ${formatCurrencyCompact(roiResults.annualDiy)} | Omilia ${formatCurrencyCompact(roiResults.annualOmilia)}`,
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
     try {
       await navigator.clipboard.writeText(tcoSummary);
       notify('Copied Unit Economics TCO Summary');
@@ -352,6 +537,13 @@ export default function App() {
     }
   };
 
+  const printMetaParts = [
+    dealMeta.prospectName ? `Prospect: ${dealMeta.prospectName}` : null,
+    dealMeta.partnerName ? `Partner: ${dealMeta.partnerName}` : null,
+    dealMeta.ccaasPlatform ? `CCaaS: ${dealMeta.ccaasPlatform}` : null,
+    dealMeta.dealOwner ? `Owner: ${dealMeta.dealOwner}` : null,
+  ].filter(Boolean);
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <TopBar
@@ -367,16 +559,21 @@ export default function App() {
         isDark={isDark}
         onToggleTheme={() => setIsDark((d) => !d)}
         onPrint={() => window.print()}
+        onOpenScenarios={() => setScenariosModalOpen(true)}
+        savedCount={savedDeals.length}
       />
 
       {/* Print Header */}
       <div className="print-only mx-auto w-full max-w-[1440px] px-6 pt-4 pb-2 border-b border-slate-300">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="font-display text-lg font-bold text-slate-900">
-            Omilia Partner Workbench — {preset.name}
+            Omilia Partner Workbench — {dealMeta.prospectName ? `${dealMeta.prospectName} · ` : ''}{preset.name}
           </h1>
           <span className="text-xs text-slate-600">{preset.compliance.join(' · ')}</span>
         </div>
+        {printMetaParts.length > 0 && (
+          <div className="mt-1 text-xs text-slate-600">{printMetaParts.join(' · ')}</div>
+        )}
       </div>
 
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-6 py-7">
@@ -385,11 +582,16 @@ export default function App() {
             preset={preset}
             inputs={inputs}
             results={roiResults}
+            payback={payback}
+            sensitivity={sensitivity}
+            psDayRate={psDayRate}
+            hleePsDays={hlee.psDays}
             onUpdateInput={handleUpdateInput}
             onApplyLaborPreset={handleApplyLaborPreset}
             onAutoFitFtes={handleAutoFitFtes}
             onResetVerticalDefaults={handleResetVerticalRoi}
             onCopySummary={handleCopyTcoSummary}
+            onDownloadCsv={handleDownloadCsv}
           />
         )}
 
@@ -405,6 +607,7 @@ export default function App() {
               }))
             }
             onToggleInclude={handleToggleIncludeUseCase}
+            onUpdateUseCaseScores={handleUpdateUseCaseScores}
             onDeleteUseCase={handleDeleteUseCase}
             onAddCustomUseCase={handleAddCustomUseCase}
             onClearAll={handleClearAllUseCases}
@@ -420,10 +623,12 @@ export default function App() {
             partnerMotion={partnerMotion}
             sovereignty={sovereignty}
             apiReadiness={apiReadiness}
+            psDayRate={psDayRate}
             hlee={hlee}
             onChangeMotion={setPartnerMotion}
             onChangeSovereignty={setSovereignty}
             onChangeApiReadiness={setApiReadiness}
+            onChangePsDayRate={setPsDayRate}
             onSetIntentCount={handleSetIntentCount}
             onToggleInclude={handleToggleIncludeUseCase}
             onDeleteUseCase={handleDeleteUseCase}
@@ -454,6 +659,13 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button
               type="button"
+              onClick={() => setScenariosModalOpen(true)}
+              className="hover:text-slate-900 dark:hover:text-slate-100 underline-offset-4 hover:underline cursor-pointer"
+            >
+              Scenarios &amp; Share Link
+            </button>
+            <button
+              type="button"
               onClick={() => setTsModalOpen(true)}
               className="hover:text-slate-900 dark:hover:text-slate-100 underline-offset-4 hover:underline cursor-pointer"
             >
@@ -480,9 +692,25 @@ export default function App() {
         motionLabel={MOTION_LABELS[partnerMotion]}
         sovereigntyLabel={SOVEREIGNTY_LABELS[sovereignty]}
         hlee={hlee}
+        psDayRate={psDayRate}
+        payback={payback}
+        dealMeta={dealMeta}
+        onUpdateDealMeta={handleUpdateDealMeta}
         briefText={briefText}
         onCopyBrief={handleCopyBrief}
+        onDownloadCsv={handleDownloadCsv}
         copied={briefCopied}
+      />
+
+      <ScenariosModal
+        open={scenariosModalOpen}
+        onClose={() => setScenariosModalOpen(false)}
+        savedDeals={savedDeals}
+        currentVerticalName={preset.shortName}
+        onSaveDeal={handleSaveDeal}
+        onLoadDeal={handleLoadDeal}
+        onDeleteDeal={handleDeleteDeal}
+        onCopyShareLink={handleCopyShareLink}
       />
 
       <TsServerModal
@@ -501,6 +729,8 @@ export default function App() {
         partnerMotion={partnerMotion}
         sovereignty={sovereignty}
         apiReadiness={apiReadiness}
+        psDayRate={psDayRate}
+        payback={payback}
         hlee={hlee}
         onSelectTab={setActiveTab}
         onChangeVertical={handleChangeVertical}
@@ -508,6 +738,8 @@ export default function App() {
         onChangeSovereignty={setSovereignty}
         onAddCustomUseCase={handleAddCustomUseCase}
         onOpenBrief={() => setBriefModalOpen(true)}
+        onOpenScenarios={() => setScenariosModalOpen(true)}
+        onDownloadCsv={handleDownloadCsv}
         onOpenTsModal={() => setTsModalOpen(true)}
       />
 

@@ -47,6 +47,25 @@ export interface VerticalPreset {
   useCases: Omit<UseCase, 'id' | 'included'>[];
 }
 
+export interface DealMetadata {
+  prospectName: string;
+  partnerName: string;
+  ccaasPlatform: string;
+  dealOwner: string;
+}
+
+export interface CallTurnScenario {
+  intentName: string;
+  callerUtterance: string;
+  asrTokens: string;
+  omiliaReply: string;
+  uuiHandoffSummary: string;
+  systemPayloads: {
+    system: string;
+    result: string;
+  }[];
+}
+
 export const VERTICAL_PRESETS: Record<VerticalKey, VerticalPreset> = {
   banking: {
     key: 'banking',
@@ -516,6 +535,84 @@ export const VERTICAL_PRESETS: Record<VerticalKey, VerticalPreset> = {
         rollout: 'Week 1 Quick-Win: Connect store locator & inventory feed.',
         gov: 'Fastest time-to-value pilot for retail stakeholders.',
       },
+    ],
+  },
+};
+
+export const CALL_TURN_SCENARIOS: Record<VerticalKey, CallTurnScenario> = {
+  banking: {
+    intentName: 'Fraud Alert Confirmation & Card Reissue',
+    callerUtterance:
+      '“My debit card just got declined at Heathrow—can you unlock it and check my checking balance?”',
+    asrTokens: '8kHz ASR · 98.4% confidence · Zero PII logged',
+    omiliaReply:
+      '“Verified via TalkGuard. I’ve cleared the £420 Heathrow travel flag on your debit card ending in 4812, and your checking balance is $8,430.50. Would you like an SMS confirmation?”',
+    uuiHandoffSummary:
+      'UUI_CTX: TG_PASS=0.96 | CARD_4812=UNFROZEN | TRAVEL_ALERT=UK_7D | BAL=$8,430.50',
+    systemPayloads: [
+      { system: 'Core Banking Ledger (z/OS REST)', result: 'Checking Bal: $8,430.50 · Card 4812 Active' },
+      { system: 'TalkGuard Passive Biometrics', result: 'Score: 0.96 PASS · Deepfake Check: Clear' },
+      { system: 'Salesforce Financial Cloud', result: 'Travel Notice Logged · 0 Open Disputes' },
+    ],
+  },
+  utilities: {
+    intentName: 'Outage Reporting & Restoration ETA',
+    callerUtterance:
+      '“Our power just went out on Oakridge Avenue—is there an outage in our area and when is the crew coming?”',
+    asrTokens: '8kHz ASR · Storm noise filter active · 97.9% confidence',
+    omiliaReply:
+      '“I see an active feeder outage affecting 142 homes on Oakridge Avenue. Smart meter ping confirms no power at your premise; a crew is en route with an estimated restoration of 5:45 PM.”',
+    uuiHandoffSummary:
+      'UUI_CTX: OMS_TICKET=#OUT-9924 | AMI_PING=OFFLINE | CREW_ETR=17:45 | PRIORITY_MED=FALSE',
+    systemPayloads: [
+      { system: 'Outage Management GIS (OMS)', result: 'Feeder #18 Fault · Crew #4 Dispatched' },
+      { system: 'Smart Meter Telemetry (AMI)', result: 'Last Gasp Received 14:12 · Status: Offline' },
+      { system: 'SAP IS-U / Oracle CC&B', result: 'Premise Verified · SMS Outage Opt-In Active' },
+    ],
+  },
+  insurance: {
+    intentName: 'Roadside Assistance Dispatch & FNOL Intake',
+    callerUtterance:
+      '“I blew a tire on I-95 northbound near Exit 42 and need a tow truck sent out right away.”',
+    asrTokens: '8kHz Highway Noise ASR · 98.1% confidence',
+    omiliaReply:
+      '“I’ve verified your Roadside coverage on your 2023 Outback with zero deductible. I just texted a one-tap GPS pin link—tap it to confirm your exact mile marker and dispatch your tow.”',
+    uuiHandoffSummary:
+      'UUI_CTX: POL=AUTO-77412 | COV_ROADSIDE=ACTIVE($0_DED) | TG_FRAUD=LOW | SMS_GPS=SENT',
+    systemPayloads: [
+      { system: 'Guidewire ClaimCenter', result: 'Pre-Staged Roadside Incident #RS-4081' },
+      { system: 'TalkGuard Fraud Scoring', result: 'ANI Match + Voiceprint Clear (Low Risk)' },
+      { system: 'PolicyCenter CRM', result: 'Roadside Coverage Verified · $0 Deductible' },
+    ],
+  },
+  healthcare: {
+    intentName: 'Appointment Rescheduling & Co-Pay Check',
+    callerUtterance:
+      '“I need to move my Thursday cardiology follow-up to Friday morning and check what my specialist co-pay is.”',
+    asrTokens: 'HIPAA Zero-Egress ASR · Inline PHI Redacted',
+    omiliaReply:
+      '“I found an opening with Dr. Patel this Friday at 9:30 AM. Your in-network specialist co-pay is $35, and your deductible is already met. Should I lock in Friday at 9:30 AM?”',
+    uuiHandoffSummary:
+      'UUI_CTX: FHIR_PAT=REDACTED | SLOT=FRI_0930_PATEL | EDI_271_COPAY=$35 | HIPAA_ZERO_EGRESS=TRUE',
+    systemPayloads: [
+      { system: 'Epic FHIR R4 Patient Record', result: 'Authenticated DOB/ZIP · Dr. Patel Follow-Up' },
+      { system: 'Payer Eligibility (EDI 270/271)', result: 'In-Network Active · Specialist Co-Pay $35' },
+      { system: 'Appointment Scheduling Engine', result: 'Held Slot: Friday 09:30 AM (120s Lock)' },
+    ],
+  },
+  telecom: {
+    intentName: 'Router Reboot & Line Outage Diagnostics',
+    callerUtterance:
+      '“My fiber router has been blinking red for ten minutes—can you check if there’s a line fault on my account?”',
+    asrTokens: '8kHz ASR · 98.6% alphanumeric accuracy',
+    omiliaReply:
+      '“I ran a remote ONT line test and confirmed your optical signal is healthy, with no area outage. I’ve triggered a 60-second firmware sync to your gateway—the light should turn solid green shortly.”',
+    uuiHandoffSummary:
+      'UUI_CTX: ONT_SIGNAL=-18dBm_OK | AREA_OUTAGE=NONE | REMOTE_RESET=TRIGGERED | CRM_CASE=#TC-310',
+    systemPayloads: [
+      { system: 'Order Management / WMS', result: 'Gateway Serial SN88412 Active · No Swap Pending' },
+      { system: 'Network & Router Diagnostics', result: 'Optical Signal OK (-18 dBm) · Reset Sent' },
+      { system: 'Salesforce / Billing CRM', result: 'Gigabit Fiber Plan · Ticket #TC-310 Logged' },
     ],
   },
 };

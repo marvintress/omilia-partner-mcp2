@@ -1,11 +1,13 @@
-import React from 'react';
-import { Copy, Printer, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Copy, Download, Printer, RotateCcw } from 'lucide-react';
 import { VerticalPreset } from '../data/verticalPresets';
 import {
   formatCurrencyCompact,
   formatCurrencyFull,
+  PaybackAnalysis,
   RoiInputs,
   RoiResults,
+  SensitivityScenario,
 } from '../utils/calculations';
 import { InfoTooltip } from './InfoTooltip';
 
@@ -13,23 +15,35 @@ interface UnitEconomicsTabProps {
   preset: VerticalPreset;
   inputs: RoiInputs;
   results: RoiResults;
+  payback: PaybackAnalysis;
+  sensitivity: SensitivityScenario[];
+  psDayRate: number;
+  hleePsDays: number;
   onUpdateInput: <K extends keyof RoiInputs>(key: K, val: RoiInputs[K]) => void;
   onApplyLaborPreset: (wage: number, burden: number) => void;
   onAutoFitFtes: () => void;
   onResetVerticalDefaults: () => void;
   onCopySummary: () => void;
+  onDownloadCsv: () => void;
 }
 
 export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
   preset,
   inputs,
   results,
+  payback,
+  sensitivity,
+  psDayRate,
+  hleePsDays,
   onUpdateInput,
   onApplyLaborPreset,
   onAutoFitFtes,
   onResetVerticalDefaults,
   onCopySummary,
+  onDownloadCsv,
 }) => {
+  const [chartView, setChartView] = useState<'bars' | 'cashflow'>('bars');
+  const [tableView, setTableView] = useState<'cfo' | 'sensitivity'>('cfo');
   const bars = [
     {
       label: 'Legacy Human + IVR',
@@ -69,7 +83,8 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               {formatCurrencyCompact(results.annualNetSavings)}
             </div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-              {formatCurrencyCompact(results.monthlyNetSavings)} / mo vs. baseline
+              {formatCurrencyCompact(results.monthlyNetSavings)}/mo ·{' '}
+              {payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} mo payback` : 'N/A'}
             </div>
           </div>
 
@@ -633,53 +648,222 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
         {/* Right Visualizations & CFO Table (7 Columns) */}
         <div className="lg:col-span-7 space-y-6">
-          {/* Annualized TCO Bar Comparison */}
+          {/* Annualized TCO Bar Comparison & 36-Month Cumulative Cash Flow */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div>
                 <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  Annualized TCO Comparison: Human Baseline vs. DIY Frontier LLM vs. Omilia OCP
+                  {chartView === 'bars'
+                    ? 'Annualized TCO Comparison: Human Baseline vs. DIY Frontier LLM vs. Omilia OCP'
+                    : '36-Month Cumulative Cash Flow & Break-Even Payback Curve'}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Scaled to 4.0x surge ceiling · Includes peak retry tax &amp; residual human escalation labor
+                  {chartView === 'bars'
+                    ? 'Scaled to 4.0x surge ceiling · Includes peak retry tax & residual human escalation labor'
+                    : `Includes ${hleePsDays} Phase 1 PS Days (@ $${psDayRate.toLocaleString()}/d = ${formatCurrencyFull(payback.implementationCost)}) upfront implementation`}
                 </p>
               </div>
-              <div className="font-mono text-xs font-semibold tabular-nums text-teal-700 dark:text-teal-400 shrink-0">
-                ${inputs.omiliaOutcomeRate.toFixed(2)} / resolved outcome
+              <div className="no-print flex items-center gap-2 shrink-0">
+                <div className="inline-flex items-center rounded-lg bg-slate-100 p-0.5 dark:bg-slate-950">
+                  <button
+                    type="button"
+                    onClick={() => setChartView('bars')}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      chartView === 'bars'
+                        ? 'bg-white text-slate-900 shadow-xs font-semibold dark:bg-slate-800 dark:text-slate-50'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Annual TCO Bars
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartView('cashflow')}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      chartView === 'cashflow'
+                        ? 'bg-white text-slate-900 shadow-xs font-semibold dark:bg-slate-800 dark:text-slate-50'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    36-Mo Cash Flow
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="mt-6 space-y-5">
-              {bars.map((bar) => {
-                const widthPct = Math.max(4, Math.min(100, (bar.val / maxBarScale) * 100));
-                return (
-                  <div key={bar.label}>
-                    <div className="flex items-baseline justify-between gap-4 mb-1.5">
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                          {bar.label}
+            {chartView === 'bars' ? (
+              <div className="mt-6 space-y-5">
+                {bars.map((bar) => {
+                  const widthPct = Math.max(4, Math.min(100, (bar.val / maxBarScale) * 100));
+                  return (
+                    <div key={bar.label}>
+                      <div className="flex items-baseline justify-between gap-4 mb-1.5">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                            {bar.label}
+                          </span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">{bar.sub}</span>
+                        </div>
+                        <span className={`font-mono text-sm font-bold tabular-nums ${bar.textClass}`}>
+                          {formatCurrencyCompact(bar.val)}/yr
                         </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">{bar.sub}</span>
                       </div>
-                      <span className={`font-mono text-sm font-bold tabular-nums ${bar.textClass}`}>
-                        {formatCurrencyCompact(bar.val)}/yr
+                      <div className="h-7 w-full overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800/80">
+                        <div
+                          className={`h-full rounded-md transition-all duration-300 ease-out ${bar.colorClass}`}
+                          style={{ width: `${widthPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              (() => {
+                const W = 620;
+                const H = 230;
+                const padL = 62;
+                const padR = 20;
+                const padT = 20;
+                const padB = 34;
+                const plotW = W - padL - padR;
+                const plotH = H - padT - padB;
+                const maxCumulative = Math.max(
+                  payback.threeYearLegacyTotal,
+                  payback.threeYearDiyTotal,
+                  payback.threeYearOmiliaTotal,
+                  1
+                );
+                const xOf = (m: number) => padL + (m / 36) * plotW;
+                const yOf = (val: number) => padT + (1 - val / maxCumulative) * plotH;
+
+                const makePath = (getter: (pt: (typeof payback.points)[number]) => number) =>
+                  payback.points
+                    .map((pt, i) => `${i === 0 ? 'M' : 'L'} ${xOf(pt.month).toFixed(1)} ${yOf(getter(pt)).toFixed(1)}`)
+                    .join(' ');
+
+                const beMonths = payback.paybackMonths;
+                const hasVisibleBreakEven = beMonths !== null && beMonths >= 0 && beMonths <= 36;
+                const beCost = hasVisibleBreakEven ? results.legacyMonthlyCost * beMonths : 0;
+
+                return (
+                  <div className="mt-5 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-4">
+                        <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                          <span className="inline-block h-2 w-4 rounded-xs bg-slate-400 dark:bg-slate-500" />
+                          Legacy ({formatCurrencyCompact(payback.threeYearLegacyTotal)})
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
+                          <span className="inline-block h-2 w-4 rounded-xs bg-rose-500" />
+                          DIY LLM ({formatCurrencyCompact(payback.threeYearDiyTotal)})
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-teal-700 dark:text-teal-400">
+                          <span className="inline-block h-2 w-4 rounded-xs bg-teal-600" />
+                          Omilia OCP ({formatCurrencyCompact(payback.threeYearOmiliaTotal)})
+                        </span>
+                      </div>
+                      <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                        {beMonths !== null ? `Break-Even: ${beMonths.toFixed(1)} mos` : 'Payback: N/A'}
                       </span>
                     </div>
-                    <div className="h-7 w-full overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800/80">
-                      <div
-                        className={`h-full rounded-md transition-all duration-300 ease-out ${bar.colorClass}`}
-                        style={{ width: `${widthPct}%` }}
-                      />
+
+                    <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-950">
+                      <svg
+                        viewBox={`0 0 ${W} ${H}`}
+                        className="block w-full h-auto select-none"
+                        role="img"
+                        aria-label="36-month cumulative spend and break-even cash flow curve"
+                      >
+                        {[0, 0.5, 1].map((frac) => {
+                          const val = maxCumulative * frac;
+                          const y = yOf(val);
+                          return (
+                            <g key={frac}>
+                              <line
+                                x1={padL}
+                                y1={y}
+                                x2={padL + plotW}
+                                y2={y}
+                                className="stroke-slate-200 dark:stroke-slate-800"
+                                strokeWidth="1"
+                              />
+                              <text
+                                x={padL - 8}
+                                y={y + 3.5}
+                                textAnchor="end"
+                                className="fill-slate-500 dark:fill-slate-400 text-[10px] font-mono tabular-nums"
+                              >
+                                {formatCurrencyCompact(val)}
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {[0, 12, 24, 36].map((m) => (
+                          <text
+                            key={m}
+                            x={xOf(m)}
+                            y={H - 10}
+                            textAnchor="middle"
+                            className="fill-slate-500 dark:fill-slate-400 text-[10px] font-mono tabular-nums"
+                          >
+                            Mo {m}
+                          </text>
+                        ))}
+
+                        <path
+                          d={makePath((p) => p.legacyCumulative)}
+                          fill="none"
+                          stroke="#94a3b8"
+                          strokeWidth="2"
+                          strokeDasharray="4 3"
+                        />
+                        <path
+                          d={makePath((p) => p.diyCumulative)}
+                          fill="none"
+                          stroke="#e11d48"
+                          strokeWidth="2.2"
+                        />
+                        <path
+                          d={makePath((p) => p.omiliaCumulative)}
+                          fill="none"
+                          stroke="#0d9488"
+                          strokeWidth="2.8"
+                        />
+
+                        {hasVisibleBreakEven && (
+                          <g>
+                            <line
+                              x1={xOf(beMonths)}
+                              y1={padT}
+                              x2={xOf(beMonths)}
+                              y2={padT + plotH}
+                              stroke="#0d9488"
+                              strokeWidth="1.2"
+                              strokeDasharray="3 3"
+                            />
+                            <circle
+                              cx={xOf(beMonths)}
+                              cy={yOf(beCost)}
+                              r="4.5"
+                              fill="#0d9488"
+                              className="stroke-white dark:stroke-slate-950"
+                              strokeWidth="2"
+                            />
+                          </g>
+                        )}
+                      </svg>
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              })()
+            )}
 
             <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3.5 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
               <span>
                 Surge impact at <strong className="font-mono text-slate-700 dark:text-slate-200">{inputs.surge.toFixed(1)}x</strong>:{' '}
-                DIY token burn scales nonlinearly (×{Math.pow(inputs.surge, 1.38).toFixed(2)}), whereas Omilia outcome pricing stays flat.
+                DIY token burn scales nonlinearly (×{Math.pow(inputs.surge, 1.38).toFixed(2)}), whereas Omilia outcome pricing stays flat (${inputs.omiliaOutcomeRate.toFixed(2)}/res).
               </span>
               <span className="font-mono tabular-nums">
                 Annual DIY vs. Omilia delta: {formatCurrencyCompact(Math.max(0, results.annualDiy - results.annualOmilia))}
@@ -687,122 +871,206 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             </div>
           </section>
 
-          {/* CFO Breakdown Table */}
+          {/* CFO Breakdown & Containment Sensitivity Table */}
           <section className="rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
               <div>
                 <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  CFO Financial &amp; Operational Impact Breakdown
+                  {tableView === 'cfo'
+                    ? 'CFO Financial & Operational Impact Breakdown'
+                    : 'Containment Sensitivity Matrix (±10% Execution Bands)'}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Vertically Integrated Speech-to-Speech Stack vs. Fragmented APIs
+                  {tableView === 'cfo'
+                    ? 'Vertically Integrated Speech-to-Speech Stack vs. Fragmented APIs'
+                    : 'Stress-tests annual savings, payback months, and FTE capacity across conservative to aggressive containment'}
                 </p>
               </div>
-              <div className="no-print flex items-center gap-2">
+              <div className="no-print flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center rounded-lg bg-slate-100 p-0.5 dark:bg-slate-950">
+                  <button
+                    type="button"
+                    onClick={() => setTableView('cfo')}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      tableView === 'cfo'
+                        ? 'bg-white text-slate-900 shadow-xs font-semibold dark:bg-slate-800 dark:text-slate-50'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    CFO Breakdown
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTableView('sensitivity')}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      tableView === 'sensitivity'
+                        ? 'bg-white text-slate-900 shadow-xs font-semibold dark:bg-slate-800 dark:text-slate-50'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Sensitivity
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={onCopySummary}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer whitespace-nowrap"
                 >
                   <Copy className="h-3.5 w-3.5" />
-                  Copy TCO Summary
+                  Copy TCO
+                </button>
+                <button
+                  type="button"
+                  onClick={onDownloadCsv}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer whitespace-nowrap"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
                 </button>
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer whitespace-nowrap"
                 >
                   <Printer className="h-3.5 w-3.5" />
-                  Print / PDF
+                  Print
                 </button>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                    <th className="px-6 py-3 font-semibold">Cost &amp; Operational Dimension</th>
-                    <th className="px-4 py-3 text-right font-semibold">Legacy Baseline</th>
-                    <th className="px-4 py-3 text-right font-semibold">DIY Frontier LLM</th>
-                    <th className="px-6 py-3 text-right font-semibold text-teal-700 dark:text-teal-400">
-                      Omilia OCP Platform
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                    <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                      Effective Containment Rate
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                      {Math.round(results.baseCont * 100)}%
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                      {Math.round(results.diyContainment * 100)}% (token drift)
-                    </td>
-                    <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
-                      {Math.round(results.targetCont * 100)}% Blended
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                    <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                      Monthly Platform &amp; AI Spend
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                      {formatCurrencyFull(results.legacyPlatformSpendMo)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-rose-700 dark:text-rose-400">
-                      {formatCurrencyFull(results.diyPlatformSpendMo)}
-                    </td>
-                    <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
-                      {formatCurrencyFull(results.omiliaPlatformSpendMo)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                    <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                      Residual Human Escalation Cost
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                      {formatCurrencyFull(results.legacyHumanCostMo)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                      {formatCurrencyFull(results.diyHumanCostMo)}
-                    </td>
-                    <td className="px-6 py-3.5 text-right font-mono tabular-nums text-slate-900 dark:text-slate-100">
-                      {formatCurrencyFull(results.omiliaHumanCostMo)}
-                    </td>
-                  </tr>
-                  <tr className="bg-slate-50/60 dark:bg-slate-800/30">
-                    <td className="px-6 py-3.5 font-semibold text-slate-900 dark:text-slate-50">
-                      Annualized Total Cost (TCO)
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                      {formatCurrencyFull(results.annualLegacy)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-rose-700 dark:text-rose-400">
-                      {formatCurrencyFull(results.annualDiy)}
-                    </td>
-                    <td className="px-6 py-3.5 text-right font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                      {formatCurrencyFull(results.annualOmilia)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                    <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                      Data Sovereignty &amp; Egress
-                    </td>
-                    <td className="px-4 py-3.5 text-right text-slate-600 dark:text-slate-400">
-                      On-Prem / Legacy
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-medium text-rose-700 dark:text-rose-400">
-                      Public Frontier Egress
-                    </td>
-                    <td className="px-6 py-3.5 text-right font-semibold text-emerald-700 dark:text-emerald-400">
-                      Zero Frontier Egress
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              {tableView === 'cfo' ? (
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
+                      <th className="px-6 py-3 font-semibold">Cost &amp; Operational Dimension</th>
+                      <th className="px-4 py-3 text-right font-semibold">Legacy Baseline</th>
+                      <th className="px-4 py-3 text-right font-semibold">DIY Frontier LLM</th>
+                      <th className="px-6 py-3 text-right font-semibold text-teal-700 dark:text-teal-400">
+                        Omilia OCP Platform
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                      <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                        Effective Containment Rate
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                        {Math.round(results.baseCont * 100)}%
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                        {Math.round(results.diyContainment * 100)}% (token drift)
+                      </td>
+                      <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                        {Math.round(results.targetCont * 100)}% Blended
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                      <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                        Monthly Platform &amp; AI Spend
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                        {formatCurrencyFull(results.legacyPlatformSpendMo)}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-rose-700 dark:text-rose-400">
+                        {formatCurrencyFull(results.diyPlatformSpendMo)}
+                      </td>
+                      <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                        {formatCurrencyFull(results.omiliaPlatformSpendMo)}
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                      <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                        Residual Human Escalation Cost
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                        {formatCurrencyFull(results.legacyHumanCostMo)}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                        {formatCurrencyFull(results.diyHumanCostMo)}
+                      </td>
+                      <td className="px-6 py-3.5 text-right font-mono tabular-nums text-slate-900 dark:text-slate-100">
+                        {formatCurrencyFull(results.omiliaHumanCostMo)}
+                      </td>
+                    </tr>
+                    <tr className="bg-slate-50/60 dark:bg-slate-800/30">
+                      <td className="px-6 py-3.5 font-semibold text-slate-900 dark:text-slate-50">
+                        Annualized Total Cost (TCO)
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                        {formatCurrencyFull(results.annualLegacy)}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-rose-700 dark:text-rose-400">
+                        {formatCurrencyFull(results.annualDiy)}
+                      </td>
+                      <td className="px-6 py-3.5 text-right font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                        {formatCurrencyFull(results.annualOmilia)}
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                      <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                        Data Sovereignty &amp; Egress
+                      </td>
+                      <td className="px-4 py-3.5 text-right text-slate-600 dark:text-slate-400">
+                        On-Prem / Legacy
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-medium text-rose-700 dark:text-rose-400">
+                        Public Frontier Egress
+                      </td>
+                      <td className="px-6 py-3.5 text-right font-semibold text-emerald-700 dark:text-emerald-400">
+                        Zero Frontier Egress
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
+                      <th className="px-6 py-3 font-semibold">Scenario Band</th>
+                      <th className="px-4 py-3 text-right font-semibold">Target Containment</th>
+                      <th className="px-4 py-3 text-right font-semibold">Annual Net Savings</th>
+                      <th className="px-4 py-3 text-right font-semibold">3-Yr vs. DIY LLM</th>
+                      <th className="px-4 py-3 text-right font-semibold">Payback</th>
+                      <th className="px-6 py-3 text-right font-semibold">FTEs Freed</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {sensitivity.map((row, idx) => {
+                      const isExpected = idx === 1;
+                      return (
+                        <tr
+                          key={row.label}
+                          className={
+                            isExpected
+                              ? 'bg-teal-50/60 dark:bg-teal-950/30 font-semibold'
+                              : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/40'
+                          }
+                        >
+                          <td className="px-6 py-3.5 text-slate-900 dark:text-slate-100">{row.label}</td>
+                          <td className="px-4 py-3.5 text-right font-mono tabular-nums text-teal-700 dark:text-teal-400">
+                            {row.targetContainmentPct}%
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-900 dark:text-slate-100">
+                            {formatCurrencyCompact(row.annualNetSavings)}
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                            {formatCurrencyCompact(row.threeYearVsDiy)}
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                            {row.paybackMonths !== null ? `${row.paybackMonths.toFixed(1)} mo` : 'N/A'}
+                          </td>
+                          <td className="px-6 py-3.5 text-right font-mono tabular-nums text-emerald-700 dark:text-emerald-400">
+                            {Math.round(row.ftesFreed).toLocaleString()} FTEs
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </section>
         </div>

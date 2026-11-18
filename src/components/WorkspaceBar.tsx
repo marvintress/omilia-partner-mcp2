@@ -1,5 +1,5 @@
 import React from 'react';
-import { Moon, Printer, Sun } from 'lucide-react';
+import { Bookmark, Moon, Printer, Sun } from 'lucide-react';
 import { VERTICAL_PRESETS, VerticalKey, VerticalPreset } from '../data/verticalPresets';
 import { InfoTooltip } from './InfoTooltip';
 
@@ -10,6 +10,8 @@ interface WorkspaceBarProps {
   isDark: boolean;
   onToggleTheme: () => void;
   onPrint: () => void;
+  onOpenScenarios: () => void;
+  savedCount: number;
 }
 
 const VERTICAL_ORDER: VerticalKey[] = ['banking', 'utilities', 'insurance', 'healthcare', 'telecom'];
@@ -21,6 +23,8 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
   isDark,
   onToggleTheme,
   onPrint,
+  onOpenScenarios,
+  savedCount,
 }) => {
   return (
     <div className="no-print border-b border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/60">
@@ -87,8 +91,17 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
           </div>
         </div>
 
-        {/* Right: Print & Theme Toggle */}
+        {/* Right: Scenarios, Print & Theme Toggle */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onOpenScenarios}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
+            Scenarios{savedCount > 0 ? ` (${savedCount})` : ''}
+          </button>
+
           <button
             type="button"
             onClick={onPrint}

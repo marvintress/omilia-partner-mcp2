@@ -20,10 +20,12 @@ interface DealScopingTabProps {
   partnerMotion: PartnerMotion;
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
+  psDayRate: number;
   hlee: HleeResult;
   onChangeMotion: (m: PartnerMotion) => void;
   onChangeSovereignty: (s: SovereigntyTier) => void;
   onChangeApiReadiness: (a: ApiReadiness) => void;
+  onChangePsDayRate: (rate: number) => void;
   onSetIntentCount: (count: number) => void;
   onToggleInclude: (id: string) => void;
   onDeleteUseCase: (id: string) => void;
@@ -37,10 +39,12 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
   partnerMotion,
   sovereignty,
   apiReadiness,
+  psDayRate,
   hlee,
   onChangeMotion,
   onChangeSovereignty,
   onChangeApiReadiness,
+  onChangePsDayRate,
   onSetIntentCount,
   onToggleInclude,
   onDeleteUseCase,
@@ -178,6 +182,34 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
                 <option value="mixed">Mixed REST + Legacy SOAP Endpoints</option>
                 <option value="mainframe">Legacy Mainframe (z/OS CICS / MQ / 3270 Screens)</option>
               </select>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <label htmlFor="inpPsDayRate" className="font-medium text-slate-700 dark:text-slate-300">
+                    PS Blended Day Rate ($ / Day)
+                  </label>
+                  <InfoTooltip
+                    label="PS Blended Day Rate"
+                    description="Blended daily services rate used to price Phase 1 HLEE PS Days into total upfront implementation cost."
+                    tcoImpact="Feeds directly into Unit Economics to compute true Break-Even Payback (Months) and 36-month cumulative net cash flow."
+                  />
+                </span>
+                <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                  ${(hlee.psDays * psDayRate).toLocaleString()} total
+                </span>
+              </div>
+              <input
+                id="inpPsDayRate"
+                type="number"
+                min={500}
+                max={5000}
+                step={50}
+                value={psDayRate}
+                onChange={(e) => onChangePsDayRate(Math.max(0, Number(e.target.value) || 0))}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs tabular-nums text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
             </div>
           </div>
 
