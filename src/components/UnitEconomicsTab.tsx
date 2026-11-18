@@ -7,6 +7,7 @@ import {
   RoiInputs,
   RoiResults,
 } from '../utils/calculations';
+import { InfoTooltip } from './InfoTooltip';
 
 interface UnitEconomicsTabProps {
   preset: VerticalPreset;
@@ -151,9 +152,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             <div className="mt-5 space-y-4">
               <div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <label htmlFor="inpCallVolume" className="font-medium text-slate-700 dark:text-slate-300">
-                    Monthly Inbound Call Volume
-                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <label htmlFor="inpCallVolume" className="font-medium text-slate-700 dark:text-slate-300">
+                      Monthly Inbound Call Volume
+                    </label>
+                    <InfoTooltip
+                      label="Monthly Inbound Call Volume"
+                      description="Baseline monthly inbound calls entering the contact center before peak surge scaling."
+                      tcoImpact="Larger call volumes spread fixed platform costs ($6.5K/mo Omilia vs. $28.5K/mo DIY) across more calls, rapidly scaling annual net TCO savings."
+                    />
+                  </span>
                   <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                     {inputs.callVolume.toLocaleString()}
                   </span>
@@ -171,9 +179,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
               <div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <label htmlFor="inpBaseContainment" className="font-medium text-slate-700 dark:text-slate-300">
-                    Baseline Legacy IVR Containment
-                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <label htmlFor="inpBaseContainment" className="font-medium text-slate-700 dark:text-slate-300">
+                      Baseline Legacy IVR Containment
+                    </label>
+                    <InfoTooltip
+                      label="Baseline Legacy IVR Containment"
+                      description="Percentage of calls currently resolved by the existing legacy IVR ($0.14/call); remaining calls route to live human agents."
+                      tcoImpact="A higher starting baseline leaves fewer human calls to automate, narrowing incremental TCO savings; lower baselines increase net savings potential."
+                    />
+                  </span>
                   <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                     {inputs.baseContainment}%
                   </span>
@@ -191,9 +206,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
               <div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <label htmlFor="inpTargetContainment" className="font-medium text-slate-700 dark:text-slate-300">
-                    Target Omilia OCP Containment
-                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <label htmlFor="inpTargetContainment" className="font-medium text-slate-700 dark:text-slate-300">
+                      Target Omilia OCP Containment
+                    </label>
+                    <InfoTooltip
+                      label="Target Omilia OCP Containment"
+                      description="Blended deterministic + agentic containment rate achieved with Omilia OCP (DIY Frontier LLMs trail by ~11 pts due to multi-turn retries)."
+                      tcoImpact="Primary driver of TCO savings: every +1% shifts calls from loaded human labor to flat outcome pricing, directly increasing annual savings and FTEs freed."
+                    />
+                  </span>
                   <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
                     {inputs.targetContainment}%
                   </span>
@@ -211,9 +233,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
               <div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <label htmlFor="inpOmiliaOutcomeRate" className="font-medium text-slate-700 dark:text-slate-300">
-                    Omilia Outcome Rate ($ / Resolved Call)
-                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <label htmlFor="inpOmiliaOutcomeRate" className="font-medium text-slate-700 dark:text-slate-300">
+                      Omilia Outcome Rate ($ / Resolved Call)
+                    </label>
+                    <InfoTooltip
+                      label="Omilia Outcome Rate"
+                      description="Predictable per-resolved-interaction commercial price rather than variable per-minute or per-token LLM billing."
+                      tcoImpact="Lower outcome rates reduce Omilia monthly platform spend directly, increasing net TCO savings against both Legacy Baseline and DIY LLM stacks."
+                    />
+                  </span>
                   <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                     ${inputs.omiliaOutcomeRate.toFixed(2)}
                   </span>
@@ -231,9 +260,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
               <div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <label htmlFor="inpAht" className="font-medium text-slate-700 dark:text-slate-300">
-                    Average Handle Time (AHT)
-                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <label htmlFor="inpAht" className="font-medium text-slate-700 dark:text-slate-300">
+                      Average Handle Time (AHT)
+                    </label>
+                    <InfoTooltip
+                      label="Average Handle Time (AHT)"
+                      description="Average talk and hold duration (seconds) for human-handled calls before adding After-Call Work (ACW)."
+                      tcoImpact="Longer AHT raises the loaded human cost per call, which magnifies the dollar savings of every call deflected or shortened."
+                    />
+                  </span>
                   <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                     {inputs.aht}s
                   </span>
@@ -251,9 +287,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
               <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <label htmlFor="inpSurge" className="font-medium text-slate-700 dark:text-slate-300">
-                    Seasonal / Outage Peak Surge Multiplier
-                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <label htmlFor="inpSurge" className="font-medium text-slate-700 dark:text-slate-300">
+                      Seasonal / Outage Peak Surge Multiplier
+                    </label>
+                    <InfoTooltip
+                      label="Peak Surge Multiplier"
+                      description="Models seasonal spikes (storms, CAT claims, Black Friday, open enrollment) from 1.0x to 4.0x baseline volume."
+                      tcoImpact="DIY Frontier LLM token burn scales nonlinearly (surge^1.38) from retries and context bloat, sharply expanding Omilia's 3-year TCO advantage."
+                    />
+                  </span>
                   <span className="font-mono font-semibold tabular-nums text-amber-700 dark:text-amber-400">
                     {inputs.surge.toFixed(1)}x
                   </span>
@@ -277,9 +320,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
           {/* Agent Cost Shaping & AI Assist */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
-              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                Agent Cost Shaping &amp; AI Assist
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  Agent Cost Shaping &amp; AI Assist
+                </h2>
+                <InfoTooltip
+                  label="Labor Shaping & Auto-Fit FTEs"
+                  description="Computes loaded human cost/call from wage, burden, occupancy, AHT, and ACW. Auto-Fit sizes agents to residual uncontained volume."
+                  tcoImpact="Higher loaded labor costs increase baseline spend and raise net dollar TCO savings per deflected or assisted interaction."
+                />
+              </div>
               <button
                 type="button"
                 onClick={onAutoFitFtes}
@@ -291,7 +341,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             </div>
 
             {/* Labor Location Presets */}
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               {[
                 { label: 'Onshore ($26/hr)', wage: 26, burden: 32 },
                 { label: 'Nearshore ($16/hr)', wage: 16, burden: 26 },
@@ -313,14 +363,27 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                   </button>
                 );
               })}
+              <InfoTooltip
+                label="Regional Labor Presets"
+                description="Applies typical hourly wage and overhead burden for Onshore, Nearshore, or Offshore contact centers and turns off CFO Override."
+                tcoImpact="Onshore labor profiles yield higher cost-per-call savings per automated interaction than offshore centers."
+                align="right"
+              />
             </div>
 
             {/* Bottom-up Labor Inputs */}
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="inpWage" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  Base Wage ($/hr)
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label htmlFor="inpWage" className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Base Wage ($/hr)
+                  </label>
+                  <InfoTooltip
+                    label="Base Wage ($/hr)"
+                    description="Direct hourly pay rate per contact center agent before benefits and overhead."
+                    tcoImpact="Directly raises loaded unit cost per human call, increasing annual net savings for every deflected call."
+                  />
+                </div>
                 <input
                   id="inpWage"
                   type="number"
@@ -334,9 +397,17 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="inpBurden" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  Burden / Overhead (%)
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label htmlFor="inpBurden" className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Burden / Overhead (%)
+                  </label>
+                  <InfoTooltip
+                    label="Burden / Overhead (%)"
+                    description="Payroll taxes, benefits, seat licensing, QA/supervision, and facilities markup on top of base wage."
+                    tcoImpact="Scales loaded hourly agent cost by (1 + burden%), increasing baseline human cost and net TCO savings."
+                    align="right"
+                  />
+                </div>
                 <input
                   id="inpBurden"
                   type="number"
@@ -350,9 +421,16 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="inpOccupancy" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  Occupancy (%)
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label htmlFor="inpOccupancy" className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Occupancy (%)
+                  </label>
+                  <InfoTooltip
+                    label="Agent Occupancy (%)"
+                    description="Share of paid shift time agents spend actively handling calls vs. idle/available time."
+                    tcoImpact="Scales productive hourly rate in the unit-cost formula; calibrating to actual WFM occupancy aligns labor savings to reality."
+                  />
+                </div>
                 <input
                   id="inpOccupancy"
                   type="number"
@@ -366,9 +444,17 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="inpAcw" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  After-Call Work (ACW s)
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label htmlFor="inpAcw" className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    After-Call Work (ACW s)
+                  </label>
+                  <InfoTooltip
+                    label="After-Call Work (ACW)"
+                    description="Post-call CRM notes, dispositioning, and wrap-up seconds added to AHT for total handle time."
+                    tcoImpact="Increases total human cost per call and amplifies capacity savings reclaimed by CSR CoPilot auto-summarization."
+                    align="right"
+                  />
+                </div>
                 <input
                   id="inpAcw"
                   type="number"
@@ -386,8 +472,13 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             <div className="mt-5 divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-800 dark:border-slate-800">
               <div className="flex items-center justify-between gap-4 py-3">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    Direct CFO Cost-per-Call Override
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    <span>Direct CFO Cost-per-Call Override</span>
+                    <InfoTooltip
+                      label="Direct CFO Cost-per-Call Override"
+                      description="Replaces bottom-up wage/burden/occupancy math with finance's pre-approved unit cost per live agent call."
+                      tcoImpact="Raising the override increases Legacy & DIY escalation labor costs, directly growing annual net TCO savings."
+                    />
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     Bypass bottom-up labor math with finance-approved unit cost
@@ -415,47 +506,70 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 </div>
               </div>
 
-              <label className="flex items-center justify-between gap-4 py-3 cursor-pointer">
+              <div className="flex items-center justify-between gap-4 py-3">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    TalkGuard Passive Voice Biometrics
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    <label htmlFor="chkTalkguard" className="cursor-pointer">
+                      TalkGuard Passive Voice Biometrics
+                    </label>
+                    <InfoTooltip
+                      label="TalkGuard Voice Biometrics"
+                      description={`Verifies caller identity passively in ~6s while screening synthetic deepfakes, eliminating ${preset.roi.talkguardSec}s of KBA questioning.`}
+                      tcoImpact="Reduces handle time and residual unit cost on every escalated human call—boosting TCO savings even on uncontained calls."
+                    />
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     Eliminates {preset.roi.talkguardSec}s KBA interrogation in ~6s natural speech
                   </div>
                 </div>
                 <input
+                  id="chkTalkguard"
                   type="checkbox"
                   checked={inputs.talkguard}
                   onChange={(e) => onUpdateInput('talkguard', e.target.checked)}
                   className="h-4 w-4 rounded accent-teal-600 cursor-pointer shrink-0"
                 />
-              </label>
+              </div>
 
-              <label className="flex items-center justify-between gap-4 py-3 cursor-pointer">
+              <div className="flex items-center justify-between gap-4 py-3">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    CSR CoPilot Real-Time Agent Assist
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    <label htmlFor="chkCopilot" className="cursor-pointer">
+                      CSR CoPilot Real-Time Agent Assist
+                    </label>
+                    <InfoTooltip
+                      label="CSR CoPilot Agent Assist"
+                      description={`Generates structured call summaries and live guidance on escalated calls, shaving ${preset.roi.copilotSec}s off After-Call Work.`}
+                      tcoImpact="Compresses residual human escalation cost and reclaims agent capacity hours across 100% of agent-assisted traffic."
+                    />
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     Auto-summarizes escalated calls (-{preset.roi.copilotSec}s ACW reduction)
                   </div>
                 </div>
                 <input
+                  id="chkCopilot"
                   type="checkbox"
                   checked={inputs.copilot}
                   onChange={(e) => onUpdateInput('copilot', e.target.checked)}
                   className="h-4 w-4 rounded accent-teal-600 cursor-pointer shrink-0"
                 />
-              </label>
+              </div>
             </div>
 
             {/* Workforce Shift Sizing */}
             <div className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
               <div>
-                <label htmlFor="inpAgents" className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  Active Agents
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label htmlFor="inpAgents" className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                    Active Agents
+                  </label>
+                  <InfoTooltip
+                    label="Active Agents"
+                    description="Current live agent headcount handling uncontained calls (use Auto-Fit FTEs to size automatically)."
+                    tcoImpact="Adjusts Days/Mo per Agent Saved without changing dollar TCO savings."
+                  />
+                </div>
                 <input
                   id="inpAgents"
                   type="number"
@@ -468,9 +582,17 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="inpShiftHours" className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  Shift Hrs/Day
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label htmlFor="inpShiftHours" className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                    Shift Hrs/Day
+                  </label>
+                  <InfoTooltip
+                    label="Shift Hours per Day"
+                    description="Paid shift hours per agent per workday."
+                    tcoImpact="Converts total monthly hours saved into Days/Mo per Agent Saved and Equivalent FTEs Freed; dollar TCO stays unchanged."
+                    align="center"
+                  />
+                </div>
                 <input
                   id="inpShiftHours"
                   type="number"
@@ -483,9 +605,17 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="inpWorkDays" className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  Work Days/Mo
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label htmlFor="inpWorkDays" className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                    Work Days/Mo
+                  </label>
+                  <InfoTooltip
+                    label="Work Days per Month"
+                    description="Average working days per FTE each month (typically 21.5)."
+                    tcoImpact="Scales Equivalent FTEs Freed (hoursSaved / (shiftHrs × workDays)) without altering dollar TCO savings."
+                    align="right"
+                  />
+                </div>
                 <input
                   id="inpWorkDays"
                   type="number"

@@ -15,6 +15,7 @@ import {
   RoiInputs,
   RoiResults,
 } from '../utils/calculations';
+import { InfoTooltip } from './InfoTooltip';
 
 interface McpInspectorTabProps {
   preset: VerticalPreset;
@@ -379,45 +380,63 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
           </div>
 
           {/* Localhost Bridge Toggle */}
-          <label className="mt-4 flex items-center justify-between gap-4 border-b border-slate-100 pb-4 cursor-pointer dark:border-slate-800">
+          <div className="mt-4 flex items-center justify-between gap-4 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div className="min-w-0">
-              <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                Localhost HTTP Bridge (<code className="font-mono text-[11px]">http://localhost:3333/mcp</code>)
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
+                <label htmlFor="chkLocalhostBridge" className="cursor-pointer">
+                  Localhost HTTP Bridge (<code className="font-mono text-[11px]">http://localhost:3333/mcp</code>)
+                </label>
+                <InfoTooltip
+                  label="Localhost HTTP Bridge"
+                  description="Routes JSON-RPC 2.0 tool calls to a locally running omilia-partner-mcp Node server, falling back seamlessly to the embedded runtime if offline."
+                  tcoImpact="Validates real sub-300ms parallel MCP tool execution—preventing the >1,200ms dead-air delays that cause caller hang-ups and lost containment savings."
+                />
               </div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {transportStatus}
               </div>
             </div>
             <input
+              id="chkLocalhostBridge"
               type="checkbox"
               checked={useBridge}
               onChange={(e) => setUseBridge(e.target.checked)}
               className="h-4 w-4 rounded accent-teal-600 cursor-pointer shrink-0"
             />
-          </label>
+          </div>
 
           {/* RPC Method Triggers */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {actions.map((act) => {
-              const isSelected = activeAction === act.key;
-              return (
-                <button
-                  key={act.key}
-                  type="button"
-                  onClick={() => handleRunAction(act.key)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                    isSelected
-                      ? 'bg-teal-700 text-white dark:bg-teal-600'
-                      : act.primary
-                      ? 'border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-300 dark:hover:bg-teal-950'
-                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Play className="h-3 w-3" />
-                  {act.label}
-                </button>
-              );
-            })}
+          <div className="mt-4">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-2">
+              <span>Live JSON-RPC 2.0 Actions</span>
+              <InfoTooltip
+                label="JSON-RPC 2.0 Tool Actions"
+                description="Executes live MCP client requests synced with your active vertical, Unit Economics sliders, and AI Radar Phase 1 scope."
+                tcoImpact="Action 5 generates the exact CFO TCO & Radar JSON report consumed by external partner agents without leaking PII to frontier LLMs."
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {actions.map((act) => {
+                const isSelected = activeAction === act.key;
+                return (
+                  <button
+                    key={act.key}
+                    type="button"
+                    onClick={() => handleRunAction(act.key)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-teal-700 text-white dark:bg-teal-600'
+                        : act.primary
+                        ? 'border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-300 dark:hover:bg-teal-950'
+                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Play className="h-3 w-3" />
+                    {act.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Voice Latency Budget Waterfall */}

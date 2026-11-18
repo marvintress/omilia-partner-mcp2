@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Copy, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react';
 import { UseCase, VerticalPreset } from '../data/verticalPresets';
 import { getQuadrantMeta, isTopRightQuadrant } from '../utils/calculations';
+import { InfoTooltip } from './InfoTooltip';
 
 interface AiRadarTabProps {
   preset: VerticalPreset;
@@ -331,12 +332,19 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
 
             <form onSubmit={handlePlotSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
               <div className="sm:col-span-6">
-                <label
-                  htmlFor="inpCustomUcName"
-                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
-                >
-                  Use Case Name
-                </label>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <label
+                    htmlFor="inpCustomUcName"
+                    className="text-xs font-medium text-slate-600 dark:text-slate-400"
+                  >
+                    Use Case Name
+                  </label>
+                  <InfoTooltip
+                    label="Custom Use Case Name"
+                    description="Adds a prospect-specific call driver to the AI Radar 2.0 portfolio during live discovery."
+                    tcoImpact="Top-Right placements immediately expand Phase 1 SOW scope and drive the containment lift behind your TCO savings."
+                  />
+                </div>
                 <input
                   id="inpCustomUcName"
                   type="text"
@@ -347,12 +355,20 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                 />
               </div>
               <div className="sm:col-span-2">
-                <label
-                  htmlFor="inpCustomUcFeas"
-                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
-                >
-                  Feasibility
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label
+                    htmlFor="inpCustomUcFeas"
+                    className="text-xs font-medium text-slate-600 dark:text-slate-400"
+                  >
+                    Feasibility
+                  </label>
+                  <InfoTooltip
+                    label="Feasibility & Data Score (0–100)"
+                    description="Measures backend API readiness, transcript availability, and integration complexity."
+                    tcoImpact="Scores ≥50 qualify for Phase 1 SOW (≥75F = +2 PS days; 50–74F = +3 PS days). Scores <50 defer to Phase 2 to protect PS margins."
+                    align="center"
+                  />
+                </div>
                 <input
                   id="inpCustomUcFeas"
                   type="number"
@@ -364,12 +380,20 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                 />
               </div>
               <div className="sm:col-span-2">
-                <label
-                  htmlFor="inpCustomUcImp"
-                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
-                >
-                  Impact
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label
+                    htmlFor="inpCustomUcImp"
+                    className="text-xs font-medium text-slate-600 dark:text-slate-400"
+                  >
+                    Impact
+                  </label>
+                  <InfoTooltip
+                    label="Financial & CX Impact (0–100)"
+                    description="Estimates inbound call-volume share, AHT savings, and customer experience upside."
+                    tcoImpact="Scores ≥50 paired with ≥50 Feasibility place the driver in Immediate Funding—unlocking TCO savings in Phase 1."
+                    align="right"
+                  />
+                </div>
                 <input
                   id="inpCustomUcImp"
                   type="number"
@@ -492,9 +516,16 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div>
-                <h3 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  Vertical Use-Case Portfolio
-                </h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                    Vertical Use-Case Portfolio
+                  </h3>
+                  <InfoTooltip
+                    label="Phase 1 SOW Scope Checkboxes"
+                    description="Checkboxes toggle whether Top-Right Quadrant drivers (≥50F & ≥50I) are included in Phase 1 SOW delivery."
+                    tcoImpact="Including high-impact intents unlocks containment TCO savings sooner while adjusting Phase 1 PS Days in Deal Scoping."
+                  />
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                   {useCases.length} intents · {includedCount} scoped in Phase 1
                 </p>

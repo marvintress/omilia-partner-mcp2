@@ -12,6 +12,7 @@ import {
   HleeResult,
   isTopRightQuadrant,
 } from '../utils/calculations';
+import { InfoTooltip } from './InfoTooltip';
 
 interface DealScopingTabProps {
   preset: VerticalPreset;
@@ -73,12 +74,19 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
 
           <div className="mt-5 space-y-4">
             <div>
-              <label
-                htmlFor="selPartnerMotion"
-                className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
-              >
-                Partner GTM Motion
-              </label>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <label
+                  htmlFor="selPartnerMotion"
+                  className="text-xs font-medium text-slate-700 dark:text-slate-300"
+                >
+                  Partner GTM Motion
+                </label>
+                <InfoTooltip
+                  label="Partner GTM Motion"
+                  description="Selects CCaaS Co-Sell, Global Systems Integrator (GSI), or BPO Managed CX to tailor co-sell positioning and RACI delivery boundaries."
+                  tcoImpact="Clarifies whether the partner captures migration/PS margin (CCaaS/GSI) or recurring AHT & outcome savings (BPO)."
+                />
+              </div>
               <select
                 id="selPartnerMotion"
                 value={partnerMotion}
@@ -92,12 +100,19 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
             </div>
 
             <div>
-              <label
-                htmlFor="selSovereignty"
-                className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
-              >
-                Deployment Sovereignty Tier
-              </label>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <label
+                  htmlFor="selSovereignty"
+                  className="text-xs font-medium text-slate-700 dark:text-slate-300"
+                >
+                  Deployment Sovereignty Tier
+                </label>
+                <InfoTooltip
+                  label="Deployment Sovereignty Tier"
+                  description="Chooses between Managed AWS Certified Walled Garden (OCP SaaS) and On-Premise / Air-Gapped deployment (OCP Bare Metal)."
+                  tcoImpact="Bare Metal adds +3 weeks and +12 PS Days for air-gapped node sizing and InfoSec sign-off, affecting Phase 1 upfront implementation TCO."
+                />
+              </div>
               <select
                 id="selSovereignty"
                 value={sovereignty}
@@ -111,9 +126,16 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
 
             <div>
               <div className="flex items-center justify-between text-xs mb-1.5">
-                <label htmlFor="inpIntentCount" className="font-medium text-slate-700 dark:text-slate-300">
-                  Phase 1 Bounded Intents (Top-Right Radar)
-                </label>
+                <span className="inline-flex items-center gap-1.5">
+                  <label htmlFor="inpIntentCount" className="font-medium text-slate-700 dark:text-slate-300">
+                    Phase 1 Bounded Intents (Top-Right Radar)
+                  </label>
+                  <InfoTooltip
+                    label="Phase 1 Bounded Intents"
+                    description="Synced with Top-Right AI Radar checkboxes. Adds 8 base PS days plus 2–3 PS days per intent depending on feasibility."
+                    tcoImpact="Keeps Phase 1 scoped to the top 3–5 volume drivers (80/20 rule) so TCO payback begins in 4–6 weeks without PS overruns."
+                  />
+                </span>
                 <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
                   {includedCount} {includedCount === 1 ? 'Intent' : 'Intents'}
                 </span>
@@ -133,12 +155,19 @@ export const DealScopingTab: React.FC<DealScopingTabProps> = ({
             </div>
 
             <div>
-              <label
-                htmlFor="selApiReadiness"
-                className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
-              >
-                Backend API &amp; Middleware Readiness
-              </label>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <label
+                  htmlFor="selApiReadiness"
+                  className="text-xs font-medium text-slate-700 dark:text-slate-300"
+                >
+                  Backend API &amp; Middleware Readiness
+                </label>
+                <InfoTooltip
+                  label="Backend API & Middleware Readiness"
+                  description="Captures whether core systems expose Modern REST/MCP APIs, Mixed SOAP endpoints, or Legacy Mainframe (z/OS CICS/3270) interfaces."
+                  tcoImpact="Mixed SOAP adds +1 wk (+4 PS days) and Mainframe adds +2 wks (+8 PS days), gating out costly 3270 screen-scraping from Phase 1 TCO."
+                />
+              </div>
               <select
                 id="selApiReadiness"
                 value={apiReadiness}

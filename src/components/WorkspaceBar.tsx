@@ -1,6 +1,7 @@
 import React from 'react';
 import { Moon, Printer, Sun } from 'lucide-react';
 import { VERTICAL_PRESETS, VerticalKey, VerticalPreset } from '../data/verticalPresets';
+import { InfoTooltip } from './InfoTooltip';
 
 interface WorkspaceBarProps {
   vertical: VerticalKey;
@@ -69,6 +70,13 @@ export const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
               ))}
             </select>
           </div>
+
+          <InfoTooltip
+            label="Industry Vertical Baseline"
+            description="Preloads vertical-specific monthly call volume, legacy containment, AHT, peak surge multiplier, compliance standards, and discovery use cases."
+            tcoImpact="Anchors TCO savings in realistic sector benchmarks (e.g., 3.2x storm surges in Utilities vs. 1.4x fraud spikes in Banking)."
+            placement="bottom"
+          />
 
           <div className="hidden xl:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
             <span>{preset.compliance.slice(0, 3).join(' · ')}</span>
