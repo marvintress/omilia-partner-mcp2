@@ -1,5 +1,6 @@
 import {
   ApiReadiness,
+  CompetitorArchetype,
   DealMetadata,
   PartnerMotion,
   SovereigntyTier,
@@ -16,6 +17,7 @@ export interface ScenarioPayload {
   partnerMotion: PartnerMotion;
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
+  competitorArchetype?: CompetitorArchetype;
   psDayRate: number;
   dealMeta: DealMetadata;
 }

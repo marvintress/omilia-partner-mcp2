@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import {
   ApiReadiness,
+  CompetitorArchetype,
   PartnerMotion,
   SovereigntyTier,
   UseCase,
@@ -62,11 +63,13 @@ interface WorkbenchGuideWidgetProps {
   partnerMotion: PartnerMotion;
   sovereignty: SovereigntyTier;
   apiReadiness: ApiReadiness;
+  competitorArchetype: CompetitorArchetype;
   psDayRate: number;
   payback: PaybackAnalysis;
   hlee: HleeResult;
   onSelectTab: (tab: TabKey) => void;
   onChangeVertical: (v: VerticalKey) => void;
+  onChangeCompetitor: (c: CompetitorArchetype) => void;
   onUpdateInput: <K extends keyof RoiInputs>(key: K, val: RoiInputs[K]) => void;
   onChangeSovereignty: (s: SovereigntyTier) => void;
   onAddCustomUseCase: (name: string, feas: number, imp: number) => void;
@@ -93,7 +96,7 @@ const TOUR_STEPS: {
     tab: 'economics',
     title: 'Step 1 of 4 · Unit Economics & TCO Simulator',
     summary: ({ preset, inputs, results }) =>
-      `Viewing ${preset.name} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Volume, Baseline vs. Target Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), and Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/resolved).\n• Surge Multiplier (1.0x–4.0x) + toggle between Annual TCO Bars and the 36-Month Cumulative Cash Flow / Break-Even Payback curve.\n• Switch the CFO Breakdown table to Sensitivity to stress-test ±10% containment, or tune wage/burden/TalkGuard/CSR CoPilot.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr net savings and ${formatCurrencyCompact(results.threeYearDiySavings)} 3-year edge over DIY LLMs.`,
+      `Viewing ${preset.name} vs. ${results.competitorProfile.title} (${inputs.callVolume.toLocaleString()} calls/mo, ${inputs.surge.toFixed(1)}x surge).\n\nWhat you can tweak here:\n• Competitor Architecture Baseline: toggle Packaged BYOLLM (Cognigy/Kore/Parloa) vs. DIY Hyperscaler (Azure OpenAI/Bedrock).\n• Volume, Baseline vs. Target Containment (${inputs.baseContainment}% → ${inputs.targetContainment}%), Surge (1.0x–4.0x), and Flat Outcome Rate ($${inputs.omiliaOutcomeRate.toFixed(2)}/resolved).\n• Toggle Annual TCO Bars vs. 36-Month Cash Flow (showing Offline Self-Learning compression from Yr1 to Yr3) + Sensitivity stress testing.\n\nLive result: ${formatCurrencyCompact(results.annualNetSavings)}/yr net savings and ${formatCurrencyCompact(results.threeYearDiySavings)} 3-year edge vs. ${results.competitorProfile.shortLabel}.`,
   },
   {
     step: 2,
@@ -132,11 +135,13 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
   partnerMotion,
   sovereignty,
   apiReadiness,
+  competitorArchetype,
   psDayRate,
   payback,
   hlee,
   onSelectTab,
   onChangeVertical,
+  onChangeCompetitor,
   onUpdateInput,
   onChangeSovereignty,
   onAddCustomUseCase,
@@ -187,6 +192,40 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       onAction: () => onChangeVertical('utilities'),
     },
     {
+      id: 'competitorBaseline',
+      tab: 'economics',
+      tabLabel: 'Unit Economics',
+      name: 'Competitor Architecture Baseline (BYOLLM vs. DIY Hyperscaler)',
+      currentValue: results.competitorProfile.shortLabel,
+      whatItDoes:
+        'Switches the market comparison baseline between Packaged BYOLLM Platforms (NiCE Cognigy, Kore.ai, Parloa) and DIY Hyperscaler / Frontier Stacks (Azure OpenAI / AWS Bedrock + Twilio/Connect).',
+      whyItMatters:
+        'Lets partners benchmark Omilia’s vertically integrated sovereign stack accurately against either metered pass-through orchestrators ($180K–$300K PS + token/ASR/TTS fees) or custom DIY engineering builds ($450K–$750K + 40% drift tax).',
+      keywords: [
+        'competitor',
+        'byollm',
+        'cognigy',
+        'kore',
+        'parloa',
+        'hyperscaler',
+        'bedrock',
+        'openai',
+        'azure',
+        'baseline',
+        'neutral',
+        'lock-in',
+        'egress',
+      ],
+      actionLabel:
+        competitorArchetype === 'byollm'
+          ? 'Compare vs. DIY Hyperscaler'
+          : 'Compare vs. Packaged BYOLLM',
+      onAction: () => {
+        onSelectTab('economics');
+        onChangeCompetitor(competitorArchetype === 'byollm' ? 'diy_hyperscaler' : 'byollm');
+      },
+    },
+    {
       id: 'callVolume',
       tab: 'economics',
       tabLabel: 'Unit Economics',
@@ -195,7 +234,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       whatItDoes:
         'Sets baseline monthly inbound call volume (50,000 to 2,000,000) before applying the peak surge multiplier.',
       whyItMatters:
-        'Establishes total contact center scale and determines how fixed monthly platform overhead ($6.5K Omilia vs. $28.5K DIY LLM) amortizes across interactions.',
+        'Establishes total contact center scale and determines how fixed platform costs ($6.5K/mo Omilia vs. competitor license or 40% drift overhead) amortize across interactions.',
       keywords: ['volume', 'call volume', 'inbound', 'calls'],
       actionLabel: 'Go to Unit Economics',
       onAction: () => onSelectTab('economics'),
@@ -219,22 +258,31 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       name: 'Target Omilia OCP Containment',
       currentValue: `${inputs.targetContainment}%`,
       whatItDoes:
-        'Sets Omilia’s blended deterministic + agentic containment rate. DIY Frontier LLMs are modeled ~11 points lower due to multi-turn retries and hallucination fallbacks.',
+        `Sets Omilia’s blended deterministic + agentic containment rate. ${results.competitorProfile.shortLabel} trails by ${Math.round(results.competitorProfile.containmentLag * 100)} pts due to latency dead-air and 8kHz acoustic gaps.`,
       whyItMatters:
         'Primary lever for call deflection savings, equivalent FTEs freed, and monthly hours reclaimed. Even a +5% containment lift significantly shifts annual net savings.',
-      keywords: ['target containment', 'containment', 'lift', 'deflection', 'blended'],
+      keywords: ['target containment', 'containment', 'lift', 'deflection', 'blended', 'bootstrapping'],
     },
     {
       id: 'omiliaOutcomeRate',
       tab: 'economics',
       tabLabel: 'Unit Economics',
-      name: 'Omilia Outcome Rate ($ / Resolved Call)',
-      currentValue: `$${inputs.omiliaOutcomeRate.toFixed(2)}`,
+      name: 'Omilia Outcome Rate & Self-Learning Compression',
+      currentValue: `$${inputs.omiliaOutcomeRate.toFixed(2)} → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)} Yr3`,
       whatItDoes:
-        'Adjusts Omilia’s commercial price per resolved automated call ($0.15–$1.00) rather than billing per minute or per token.',
+        'Sets Year 1 flat outcome pricing ($0.15–$1.00/resolved) with zero pass-through token/ASR/TTS fees, then applies Offline Self-Learning compression (-10% Yr2, -18% Yr3) over 36 months.',
       whyItMatters:
-        'Lets partners model deal-specific pricing tiers and show CFOs predictable unit economics—you only pay when an intent is actually resolved.',
-      keywords: ['outcome rate', 'outcome pricing', 'price', 'pricing', 'resolved'],
+        'Proves how Omilia eliminates multi-turn token volatility today and lowers effective unit cost over 3 years by codifying recurring agentic patterns into deterministic micro-flows.',
+      keywords: [
+        'outcome rate',
+        'outcome pricing',
+        'price',
+        'pricing',
+        'resolved',
+        'self-learning',
+        'compression',
+        'micro-flow',
+      ],
     },
     {
       id: 'ahtAcw',
@@ -255,10 +303,10 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
       name: 'Seasonal / Outage Peak Surge Multiplier',
       currentValue: `${inputs.surge.toFixed(1)}x`,
       whatItDoes:
-        'Multiplies monthly volume (1.0x–4.0x) and triggers a nonlinear DIY LLM token-burn penalty of surge^1.38 on competitor stacks.',
+        `Multiplies monthly volume (1.0x–4.0x) and triggers a nonlinear surge^${results.competitorProfile.surgeExponent.toFixed(2)} metered usage / token penalty on ${results.competitorProfile.shortLabel}.`,
       whyItMatters:
-        'Demonstrates why DIY Frontier LLM budgets blow up during storms, CAT claims, Black Friday, or Open Enrollment—while Omilia’s flat outcome pricing stays linear.',
-      keywords: ['surge', 'peak', 'multiplier', 'storm', 'spike', 'diy', 'llm', 'token'],
+        `Demonstrates why ${results.competitorProfile.shortLabel} bills spike unpredictably during peak volume or deep RAG turns—while Omilia’s flat outcome rate holds steady.`,
+      keywords: ['surge', 'peak', 'multiplier', 'storm', 'spike', 'diy', 'llm', 'token', 'rag'],
       actionLabel: 'Test 2.5x Surge',
       onAction: () => {
         onSelectTab('economics');
@@ -654,9 +702,9 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
 
   const contextPrompts: Record<TabKey, string[]> = {
     economics: [
+      'Explain Packaged BYOLLM vs. DIY Hyperscaler',
+      'How does Self-Learning compress unit costs?',
       'Explain every control on economics',
-      'How do payback & cash flow work?',
-      'Why tweak surge & DIY LLM?',
     ],
     radar: [
       'Explain every control on radar',

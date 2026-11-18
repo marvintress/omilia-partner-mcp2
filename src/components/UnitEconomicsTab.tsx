@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
-import { Copy, Download, Printer, RotateCcw } from 'lucide-react';
-import { VerticalPreset } from '../data/verticalPresets';
+import { Check, Copy, Download, Printer, RotateCcw } from 'lucide-react';
+import {
+  COMPETITOR_PROFILES,
+  CompetitorArchetype,
+  VerticalPreset,
+} from '../data/verticalPresets';
 import {
   formatCurrencyCompact,
   formatCurrencyFull,
@@ -17,8 +21,11 @@ interface UnitEconomicsTabProps {
   results: RoiResults;
   payback: PaybackAnalysis;
   sensitivity: SensitivityScenario[];
+  competitorArchetype: CompetitorArchetype;
+  onChangeCompetitor: (c: CompetitorArchetype) => void;
   psDayRate: number;
   hleePsDays: number;
+  hleeTimelineLabel: string;
   onUpdateInput: <K extends keyof RoiInputs>(key: K, val: RoiInputs[K]) => void;
   onApplyLaborPreset: (wage: number, burden: number) => void;
   onAutoFitFtes: () => void;
@@ -33,8 +40,11 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
   results,
   payback,
   sensitivity,
+  competitorArchetype,
+  onChangeCompetitor,
   psDayRate,
   hleePsDays,
+  hleeTimelineLabel,
   onUpdateInput,
   onApplyLaborPreset,
   onAutoFitFtes,
@@ -44,6 +54,9 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 }) => {
   const [chartView, setChartView] = useState<'bars' | 'cashflow'>('bars');
   const [tableView, setTableView] = useState<'cfo' | 'sensitivity'>('cfo');
+
+  const comp = results.competitorProfile;
+
   const bars = [
     {
       label: 'Legacy Human + IVR',
@@ -53,15 +66,17 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
       textClass: 'text-slate-700 dark:text-slate-300',
     },
     {
-      label: 'DIY Frontier LLM Stack',
-      sub: `${Math.round(results.diyContainment * 100)}% w/ token retry drift`,
+      label: `${comp.title} (${comp.examples})`,
+      sub: `${Math.round(results.diyContainment * 100)}% eff. · $${results.diyPerCallVariableRate.toFixed(2)}/call + ${
+        comp.key === 'byollm' ? 'license & ASR/TTS' : '40% drift tax'
+      }`,
       val: results.annualDiy,
       colorClass: 'bg-rose-600 dark:bg-rose-500',
       textClass: 'text-rose-700 dark:text-rose-400',
     },
     {
-      label: 'Omilia OCP Platform',
-      sub: `${Math.round(results.targetCont * 100)}% blended · $${inputs.omiliaOutcomeRate.toFixed(2)}/res`,
+      label: 'Omilia Vertically Integrated Sovereign Stack',
+      sub: `${Math.round(results.targetCont * 100)}% blended · $${inputs.omiliaOutcomeRate.toFixed(2)}/res flat → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)} Yr3`,
       val: results.annualOmilia,
       colorClass: 'bg-teal-600 dark:bg-teal-500',
       textClass: 'text-teal-700 dark:text-teal-400',
@@ -90,13 +105,13 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
           <div className="p-5">
             <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              3-Year TCO vs. DIY LLM
+              3-Yr Savings vs. {comp.shortLabel}
             </div>
             <div className="mt-1.5 font-display text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-slate-50">
-              {formatCurrencyCompact(results.threeYearDiySavings)}
+              {formatCurrencyCompact(payback.threeYearCompetitorSavings)}
             </div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Saved vs. frontier token + glue tax
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+              Incl. {comp.setupRangeLabel} &amp; Self-Learning
             </div>
           </div>
 
@@ -227,7 +242,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     </label>
                     <InfoTooltip
                       label="Target Omilia OCP Containment"
-                      description="Blended deterministic + agentic containment rate achieved with Omilia OCP (DIY Frontier LLMs trail by ~11 pts due to multi-turn retries)."
+                      description={`Blended deterministic + agentic containment rate achieved with Omilia OCP (${comp.shortLabel} trails by ~${Math.round(comp.containmentLag * 100)} pts due to multi-turn latency & acoustic gaps).`}
                       tcoImpact="Primary driver of TCO savings: every +1% shifts calls from loaded human labor to flat outcome pricing, directly increasing annual savings and FTEs freed."
                     />
                   </span>
@@ -254,8 +269,8 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     </label>
                     <InfoTooltip
                       label="Omilia Outcome Rate"
-                      description="Predictable per-resolved-interaction commercial price rather than variable per-minute or per-token LLM billing."
-                      tcoImpact="Lower outcome rates reduce Omilia monthly platform spend directly, increasing net TCO savings against both Legacy Baseline and DIY LLM stacks."
+                      description="Predictable Year 1 per-resolved-interaction price with zero pass-through token/ASR/TTS fees; Offline Self-Learning compresses effective unit cost in Years 2–3."
+                      tcoImpact={`Lower outcome rates reduce Omilia monthly spend directly, widening 3-year TCO savings against both Legacy Baseline and ${comp.shortLabel}.`}
                     />
                   </span>
                   <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
@@ -309,7 +324,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     <InfoTooltip
                       label="Peak Surge Multiplier"
                       description="Models seasonal spikes (storms, CAT claims, Black Friday, open enrollment) from 1.0x to 4.0x baseline volume."
-                      tcoImpact="DIY Frontier LLM token burn scales nonlinearly (surge^1.38) from retries and context bloat, sharply expanding Omilia's 3-year TCO advantage."
+                      tcoImpact={`${comp.shortLabel} metered token, ASR/TTS & retry usage scales nonlinearly (surge^${comp.surgeExponent.toFixed(2)}), sharply expanding Omilia's 3-year TCO advantage.`}
                     />
                   </span>
                   <span className="font-mono font-semibold tabular-nums text-amber-700 dark:text-amber-400">
@@ -648,19 +663,76 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
 
         {/* Right Visualizations & CFO Table (7 Columns) */}
         <div className="lg:col-span-7 space-y-6">
-          {/* Annualized TCO Bar Comparison & 36-Month Cumulative Cash Flow */}
+          {/* Competitor Architecture Baseline Selector & TCO Chart */}
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
+            {/* Competitor Architecture Selector Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Competitor Architecture Baseline
+                </span>
+                <InfoTooltip
+                  label="Competitor Architecture Baseline"
+                  description="Compare Omilia's vertically integrated Sovereign Stack against either Packaged BYOLLM platforms (NiCE Cognigy, Kore.ai, Parloa) or custom DIY Hyperscaler stacks (Azure OpenAI / Bedrock)."
+                  tcoImpact="Each baseline models realistic upfront build costs ($180K–$300K vs. $450K–$750K), pass-through token/ASR/TTS metering or 40% schema-drift maintenance taxes, and turn-latency attrition."
+                />
+              </div>
+
+              <div
+                role="group"
+                aria-label="Competitor Architecture Baseline"
+                className="no-print inline-flex items-center rounded-lg bg-slate-100 p-0.5 dark:bg-slate-950"
+              >
+                {(
+                  [
+                    { key: 'byollm', label: 'Packaged BYOLLM (Cognigy / Kore / Parloa)' },
+                    { key: 'diy_hyperscaler', label: 'DIY Hyperscaler (OpenAI / Bedrock)' },
+                  ] as { key: CompetitorArchetype; label: string }[]
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => onChangeCompetitor(opt.key)}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      competitorArchetype === opt.key
+                        ? 'bg-white text-slate-900 shadow-xs font-semibold dark:bg-slate-800 dark:text-slate-50'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Active Baseline Cost & Architecture Mechanics Note */}
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-slate-100 pb-4 text-[11.5px] leading-relaxed dark:border-slate-800">
+              <div className="text-slate-600 dark:text-slate-300">
+                <strong className="font-semibold text-rose-700 dark:text-rose-400">
+                  {COMPETITOR_PROFILES[competitorArchetype].shortLabel} Cost Mechanics:
+                </strong>{' '}
+                {comp.commercialSummary}
+              </div>
+              <div className="text-slate-600 dark:text-slate-300">
+                <strong className="font-semibold text-slate-800 dark:text-slate-200">
+                  Latency &amp; Perimeter Risk:
+                </strong>{' '}
+                {comp.architectureSummary}
+              </div>
+            </div>
+
+            {/* TCO Comparison Header + Chart Mode Switcher */}
+            <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
                   {chartView === 'bars'
-                    ? 'Annualized TCO Comparison: Human Baseline vs. DIY Frontier LLM vs. Omilia OCP'
-                    : '36-Month Cumulative Cash Flow & Break-Even Payback Curve'}
+                    ? `Annualized Yr-1 TCO: Legacy vs. ${comp.shortLabel} vs. Omilia Sovereign Stack`
+                    : `36-Month Cumulative Cash Flow & Self-Learning Compression (${comp.shortLabel})`}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {chartView === 'bars'
-                    ? 'Scaled to 4.0x surge ceiling · Includes peak retry tax & residual human escalation labor'
-                    : `Includes ${hleePsDays} Phase 1 PS Days (@ $${psDayRate.toLocaleString()}/d = ${formatCurrencyFull(payback.implementationCost)}) upfront implementation`}
+                    ? `Omilia flat $${inputs.omiliaOutcomeRate.toFixed(2)}/res vs. metered pass-through token/ASR/TTS & escalation labor`
+                    : `Omilia PS ${formatCurrencyFull(payback.implementationCost)} (${hleeTimelineLabel}) vs. ${comp.setupRangeLabel} (${comp.timeToValueLabel})`}
                 </p>
               </div>
               <div className="no-print flex items-center gap-2 shrink-0">
@@ -692,7 +764,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
             </div>
 
             {chartView === 'bars' ? (
-              <div className="mt-6 space-y-5">
+              <div className="mt-5 space-y-5">
                 {bars.map((bar) => {
                   const widthPct = Math.max(4, Math.min(100, (bar.val / maxBarScale) * 100));
                   return (
@@ -756,7 +828,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                         </span>
                         <span className="inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
                           <span className="inline-block h-2 w-4 rounded-xs bg-rose-500" />
-                          DIY LLM ({formatCurrencyCompact(payback.threeYearDiyTotal)})
+                          {comp.tableHeader} ({formatCurrencyCompact(payback.threeYearDiyTotal)})
                         </span>
                         <span className="inline-flex items-center gap-1.5 font-semibold text-teal-700 dark:text-teal-400">
                           <span className="inline-block h-2 w-4 rounded-xs bg-teal-600" />
@@ -773,7 +845,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                         viewBox={`0 0 ${W} ${H}`}
                         className="block w-full h-auto select-none"
                         role="img"
-                        aria-label="36-month cumulative spend and break-even cash flow curve"
+                        aria-label="36-month cumulative spend with Offline Self-Learning cost compression and break-even payback"
                       >
                         {[0, 0.5, 1].map((frac) => {
                           const val = maxCumulative * frac;
@@ -855,20 +927,104 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                         )}
                       </svg>
                     </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+                      <span>
+                        <strong className="font-semibold text-slate-800 dark:text-slate-200">
+                          Offline Self-Learning Cost Compression:
+                        </strong>{' '}
+                        Closed loop codifies agentic turns into deterministic micro-flows over 36 months.
+                      </span>
+                      <span className="font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                        Yr1 ${payback.omiliaUnitRatesByYear.yr1.toFixed(2)} → Yr2 $
+                        {payback.omiliaUnitRatesByYear.yr2.toFixed(2)} → Yr3 $
+                        {payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/res
+                      </span>
+                    </div>
                   </div>
                 );
               })()
             )}
 
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3.5 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              <span>
-                Surge impact at <strong className="font-mono text-slate-700 dark:text-slate-200">{inputs.surge.toFixed(1)}x</strong>:{' '}
-                DIY token burn scales nonlinearly (×{Math.pow(inputs.surge, 1.38).toFixed(2)}), whereas Omilia outcome pricing stays flat (${inputs.omiliaOutcomeRate.toFixed(2)}/res).
-              </span>
-              <span className="font-mono tabular-nums">
-                Annual DIY vs. Omilia delta: {formatCurrencyCompact(Math.max(0, results.annualDiy - results.annualOmilia))}
+            {/* Architectural Advantage Indicators (Unboxed 4-Column Hairline Grid) */}
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 border-t border-slate-100 pt-4 dark:divide-slate-800 dark:border-slate-800">
+              <div className="py-2 sm:pr-3 sm:py-0">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+                  <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Sub-1s Voice Latency</span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                  &lt;45ms Lexis TTS vs. {comp.turnLatencyLabel}
+                </div>
+              </div>
+              <div className="py-2 sm:px-3 sm:py-0">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+                  <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Zero Third-Party Egress</span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                  PCI L1 / FedRAMP-ready vs. {comp.egressLabel}
+                </div>
+              </div>
+              <div className="py-2 sm:px-3 sm:py-0">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+                  <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Native TalkGuard</span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                  Passive biometrics &amp; deepfake block
+                </div>
+              </div>
+              <div className="py-2 sm:pl-3 sm:py-0">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+                  <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>100% CCaaS Neutral</span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
+                  Genesys, NICE, AWS Connect, RingCentral
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Dynamic Executive CFO & Partner Takeaway Callout */}
+          <section
+            aria-label="Executive CFO and Partner Summary"
+            className="rounded-xl border border-teal-200 bg-teal-50/40 p-5 dark:border-teal-900/60 dark:bg-teal-950/25"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-display text-xs font-bold text-slate-900 dark:text-slate-50">
+                Executive CFO &amp; Partner Summary — {preset.shortName} vs. {comp.title}
+              </h3>
+              <span className="font-mono text-[11px] font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                {formatCurrencyCompact(payback.threeYearCompetitorSavings)} 3-Yr TCO Advantage
               </span>
             </div>
+            <p className="mt-2 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+              Selecting Omilia over <strong className="font-semibold">{comp.examples}</strong> delivers{' '}
+              <strong className="font-mono font-semibold tabular-nums text-teal-800 dark:text-teal-300">
+                {formatCurrencyCompact(payback.threeYearCompetitorSavings)}
+              </strong>{' '}
+              in 3-year cumulative TCO savings and{' '}
+              <strong className="font-mono font-semibold tabular-nums text-teal-800 dark:text-teal-300">
+                {formatCurrencyCompact(results.annualNetSavings)}/yr
+              </strong>{' '}
+              in net savings over your Legacy baseline ({Math.round(results.ftesFreed).toLocaleString()} equivalent
+              FTEs freed). Omilia locks in flat{' '}
+              <strong className="font-mono tabular-nums">${inputs.omiliaOutcomeRate.toFixed(2)}/resolved</strong>{' '}
+              pricing with zero pass-through token, ASR, or TTS volatility during{' '}
+              <strong className="font-mono tabular-nums">{inputs.surge.toFixed(1)}x</strong> volume surges—compressing
+              further to{' '}
+              <strong className="font-mono tabular-nums">
+                ${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/resolved
+              </strong>{' '}
+              by Year 3 via the Offline Self-Learning Closed Loop. Using{' '}
+              <strong className="font-semibold">AI Bootstrapping (95%+ Day-1 accuracy)</strong>, Phase 1 goes live
+              in <strong className="font-semibold">{hleeTimelineLabel}</strong> (
+              <span className="font-mono tabular-nums">{formatCurrencyFull(payback.implementationCost)}</span> PS) vs.{' '}
+              {comp.timeToValueLabel} ({comp.setupRangeLabel}) on {comp.shortLabel}, keeping your CCaaS choice 100%
+              portable inside a zero-egress security perimeter.
+            </p>
           </section>
 
           {/* CFO Breakdown & Containment Sensitivity Table */}
@@ -877,12 +1033,12 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <div>
                 <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
                   {tableView === 'cfo'
-                    ? 'CFO Financial & Operational Impact Breakdown'
+                    ? 'CFO Financial & Architectural Impact Breakdown'
                     : 'Containment Sensitivity Matrix (±10% Execution Bands)'}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {tableView === 'cfo'
-                    ? 'Vertically Integrated Speech-to-Speech Stack vs. Fragmented APIs'
+                    ? `Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`
                     : 'Stress-tests annual savings, payback months, and FTE capacity across conservative to aggressive containment'}
                 </p>
               </div>
@@ -944,15 +1100,29 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                      <th className="px-6 py-3 font-semibold">Cost &amp; Operational Dimension</th>
+                      <th className="px-6 py-3 font-semibold">Cost &amp; Architectural Dimension</th>
                       <th className="px-4 py-3 text-right font-semibold">Legacy Baseline</th>
-                      <th className="px-4 py-3 text-right font-semibold">DIY Frontier LLM</th>
+                      <th className="px-4 py-3 text-right font-semibold">{comp.tableHeader}</th>
                       <th className="px-6 py-3 text-right font-semibold text-teal-700 dark:text-teal-400">
-                        Omilia OCP Platform
+                        Omilia Sovereign Stack
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                      <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                        Upfront Implementation &amp; Time-to-Value
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-600 dark:text-slate-400">
+                        $0 (Sunk)
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-rose-700 dark:text-rose-400">
+                        {formatCurrencyFull(payback.competitorSetupCost)} ({comp.timeToValueLabel})
+                      </td>
+                      <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                        {formatCurrencyFull(payback.implementationCost)} ({hleeTimelineLabel})
+                      </td>
+                    </tr>
                     <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                       <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
                         Effective Containment Rate
@@ -961,15 +1131,15 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                         {Math.round(results.baseCont * 100)}%
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                        {Math.round(results.diyContainment * 100)}% (token drift)
+                        {Math.round(results.diyContainment * 100)}% (latency drop-off)
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-semibold tabular-nums text-teal-700 dark:text-teal-400">
-                        {Math.round(results.targetCont * 100)}% Blended
+                        {Math.round(results.targetCont * 100)}% Blended (95%+ Day-1)
                       </td>
                     </tr>
                     <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                       <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                        Monthly Platform &amp; AI Spend
+                        Monthly Platform, Metering &amp; Maintenance
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
                         {formatCurrencyFull(results.legacyPlatformSpendMo)}
@@ -997,30 +1167,30 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     </tr>
                     <tr className="bg-slate-50/60 dark:bg-slate-800/30">
                       <td className="px-6 py-3.5 font-semibold text-slate-900 dark:text-slate-50">
-                        Annualized Total Cost (TCO)
+                        3-Year Cumulative Spend (Incl. Setup &amp; Compression)
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                        {formatCurrencyFull(results.annualLegacy)}
+                        {formatCurrencyCompact(payback.threeYearLegacyTotal)}
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono font-bold tabular-nums text-rose-700 dark:text-rose-400">
-                        {formatCurrencyFull(results.annualDiy)}
+                        {formatCurrencyCompact(payback.threeYearDiyTotal)}
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                        {formatCurrencyFull(results.annualOmilia)}
+                        {formatCurrencyCompact(payback.threeYearOmiliaTotal)}
                       </td>
                     </tr>
                     <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                       <td className="px-6 py-3.5 font-medium text-slate-900 dark:text-slate-100">
-                        Data Sovereignty &amp; Egress
+                        Turn Latency, Sovereignty &amp; Lock-In
                       </td>
                       <td className="px-4 py-3.5 text-right text-slate-600 dark:text-slate-400">
-                        On-Prem / Legacy
+                        Legacy IVR
                       </td>
                       <td className="px-4 py-3.5 text-right font-medium text-rose-700 dark:text-rose-400">
-                        Public Frontier Egress
+                        {comp.turnLatencyLabel} · {comp.egressLabel}
                       </td>
                       <td className="px-6 py-3.5 text-right font-semibold text-emerald-700 dark:text-emerald-400">
-                        Zero Frontier Egress
+                        &lt;1s (&lt;45ms Lexis) · Zero Egress · CCaaS Neutral
                       </td>
                     </tr>
                   </tbody>
@@ -1032,7 +1202,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                       <th className="px-6 py-3 font-semibold">Scenario Band</th>
                       <th className="px-4 py-3 text-right font-semibold">Target Containment</th>
                       <th className="px-4 py-3 text-right font-semibold">Annual Net Savings</th>
-                      <th className="px-4 py-3 text-right font-semibold">3-Yr vs. DIY LLM</th>
+                      <th className="px-4 py-3 text-right font-semibold">3-Yr vs. {comp.shortLabel}</th>
                       <th className="px-4 py-3 text-right font-semibold">Payback</th>
                       <th className="px-6 py-3 text-right font-semibold">FTEs Freed</th>
                     </tr>
@@ -1057,7 +1227,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                             {formatCurrencyCompact(row.annualNetSavings)}
                           </td>
                           <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                            {formatCurrencyCompact(row.threeYearVsDiy)}
+                            {formatCurrencyCompact(row.threeYearVsCompetitor)}
                           </td>
                           <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
                             {row.paybackMonths !== null ? `${row.paybackMonths.toFixed(1)} mo` : 'N/A'}

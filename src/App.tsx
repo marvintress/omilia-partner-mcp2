@@ -16,6 +16,8 @@ import { WorkbenchGuideWidget } from './components/WorkbenchGuideWidget';
 import { WorkspaceBar } from './components/WorkspaceBar';
 import {
   ApiReadiness,
+  COMPETITOR_PROFILES,
+  CompetitorArchetype,
   DealMetadata,
   PartnerMotion,
   SovereigntyTier,
@@ -162,6 +164,9 @@ export default function App() {
   const [apiReadiness, setApiReadiness] = useState<ApiReadiness>(
     () => urlSeed?.apiReadiness ?? 'modern'
   );
+  const [competitorArchetype, setCompetitorArchetype] = useState<CompetitorArchetype>(
+    () => urlSeed?.competitorArchetype ?? 'byollm'
+  );
   const [psDayRate, setPsDayRate] = useState<number>(() => urlSeed?.psDayRate ?? 1800);
   const [dealMeta, setDealMeta] = useState<DealMetadata>(() => urlSeed?.dealMeta ?? DEFAULT_DEAL_META);
   const [savedDeals, setSavedDeals] = useState<SavedDealProfile[]>(() => loadSavedDeals());
@@ -193,7 +198,10 @@ export default function App() {
   const useCases = useCasesByVertical[vertical];
   const selectedUcId = selectedUcByVertical[vertical];
 
-  const roiResults = useMemo(() => calculateUnitEconomics(inputs, preset), [inputs, preset]);
+  const roiResults = useMemo(
+    () => calculateUnitEconomics(inputs, preset, competitorArchetype),
+    [inputs, preset, competitorArchetype]
+  );
 
   const includedUseCases = useMemo(
     () => useCases.filter((uc) => isTopRightQuadrant(uc) && uc.included !== false),
@@ -206,13 +214,13 @@ export default function App() {
   );
 
   const payback = useMemo(
-    () => computePaybackAndCashFlow(roiResults, hlee.psDays, psDayRate),
-    [roiResults, hlee.psDays, psDayRate]
+    () => computePaybackAndCashFlow(roiResults, hlee.psDays, psDayRate, inputs.omiliaOutcomeRate),
+    [roiResults, hlee.psDays, psDayRate, inputs.omiliaOutcomeRate]
   );
 
   const sensitivity = useMemo(
-    () => computeSensitivityScenarios(inputs, preset, hlee.psDays, psDayRate),
-    [inputs, preset, hlee.psDays, psDayRate]
+    () => computeSensitivityScenarios(inputs, preset, hlee.psDays, psDayRate, competitorArchetype),
+    [inputs, preset, hlee.psDays, psDayRate, competitorArchetype]
   );
 
   const briefText = useMemo(
@@ -240,6 +248,7 @@ export default function App() {
     partnerMotion,
     sovereignty,
     apiReadiness,
+    competitorArchetype,
     psDayRate,
     dealMeta,
   });
@@ -247,6 +256,11 @@ export default function App() {
   const handleChangeVertical = (next: VerticalKey) => {
     setVertical(next);
     notify(`Switched vertical to ${VERTICAL_PRESETS[next].name}`);
+  };
+
+  const handleChangeCompetitor = (next: CompetitorArchetype) => {
+    setCompetitorArchetype(next);
+    notify(`Comparing Omilia vs. ${COMPETITOR_PROFILES[next].title}`);
   };
 
   const handleUpdateInput = <K extends keyof RoiInputs>(key: K, val: RoiInputs[K]) => {
@@ -456,6 +470,7 @@ export default function App() {
     setPartnerMotion(p.partnerMotion);
     setSovereignty(p.sovereignty);
     setApiReadiness(p.apiReadiness);
+    setCompetitorArchetype(p.competitorArchetype ?? 'byollm');
     setPsDayRate(p.psDayRate || 1800);
     setDealMeta(p.dealMeta ?? DEFAULT_DEAL_META);
     notify(`Loaded deal "${deal.name}"`);
@@ -496,15 +511,18 @@ export default function App() {
   };
 
   const handleCopyTcoSummary = async () => {
+    const comp = roiResults.competitorProfile;
     const tcoSummary = [
       `OMILIA UNIT ECONOMICS & TCO SUMMARY — ${preset.name.toUpperCase()}`,
       dealMeta.prospectName ? `Prospect: ${dealMeta.prospectName}` : null,
+      `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`,
       `Monthly Inbound Calls: ${inputs.callVolume.toLocaleString()} (${inputs.surge.toFixed(1)}x surge = ${Math.round(roiResults.effectiveMonthlyCalls).toLocaleString()} calls/mo)`,
       `Containment: ${Math.round(roiResults.baseCont * 100)}% Baseline -> ${Math.round(roiResults.targetCont * 100)}% Omilia (+${roiResults.containmentLiftPct}% Lift)`,
-      `Annual Net Savings: ${formatCurrencyCompact(roiResults.annualNetSavings)} | 3-Year vs. DIY LLM: ${formatCurrencyCompact(roiResults.threeYearDiySavings)}`,
-      `Break-Even Payback: ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/d)`,
+      `Annual Net Savings: ${formatCurrencyCompact(roiResults.annualNetSavings)} | 3-Year vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)}`,
+      `Self-Learning Outcome Rate: $${payback.omiliaUnitRatesByYear.yr1.toFixed(2)}/res (Yr1) -> $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/res (Yr3)`,
+      `Break-Even Payback: ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'} (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/d vs. ${comp.setupRangeLabel})`,
       `Capacity Reclaimed: ${roiResults.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(roiResults.ftesFreed).toLocaleString()} FTEs freed)`,
-      `Annual TCO: Legacy ${formatCurrencyCompact(roiResults.annualLegacy)} | DIY LLM ${formatCurrencyCompact(roiResults.annualDiy)} | Omilia ${formatCurrencyCompact(roiResults.annualOmilia)}`,
+      `Annualized Yr1 TCO: Legacy ${formatCurrencyCompact(roiResults.annualLegacy)} | ${comp.tableHeader} ${formatCurrencyCompact(roiResults.annualDiy)} | Omilia ${formatCurrencyCompact(roiResults.annualOmilia)}`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -584,8 +602,11 @@ export default function App() {
             results={roiResults}
             payback={payback}
             sensitivity={sensitivity}
+            competitorArchetype={competitorArchetype}
+            onChangeCompetitor={handleChangeCompetitor}
             psDayRate={psDayRate}
             hleePsDays={hlee.psDays}
+            hleeTimelineLabel={hlee.timelineLabel}
             onUpdateInput={handleUpdateInput}
             onApplyLaborPreset={handleApplyLaborPreset}
             onAutoFitFtes={handleAutoFitFtes}
@@ -729,11 +750,13 @@ export default function App() {
         partnerMotion={partnerMotion}
         sovereignty={sovereignty}
         apiReadiness={apiReadiness}
+        competitorArchetype={competitorArchetype}
         psDayRate={psDayRate}
         payback={payback}
         hlee={hlee}
         onSelectTab={setActiveTab}
         onChangeVertical={handleChangeVertical}
+        onChangeCompetitor={handleChangeCompetitor}
         onUpdateInput={handleUpdateInput}
         onChangeSovereignty={setSovereignty}
         onAddCustomUseCase={handleAddCustomUseCase}

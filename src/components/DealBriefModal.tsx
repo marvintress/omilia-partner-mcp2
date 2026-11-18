@@ -190,12 +190,14 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
               </div>
             </div>
             <div className="p-4">
-              <div className="text-xs text-slate-500 dark:text-slate-400">3-Yr vs. DIY LLM</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                3-Yr vs. {results.competitorProfile.shortLabel}
+              </div>
               <div className="mt-1 font-mono text-xl font-bold tabular-nums text-slate-900 dark:text-slate-50">
-                {formatCurrencyCompact(results.threeYearDiySavings)}
+                {formatCurrencyCompact(payback.threeYearCompetitorSavings)}
               </div>
               <div className="mt-0.5 text-[11px] text-slate-500 tabular-nums">
-                @{inputs.surge.toFixed(1)}x peak surge
+                @{inputs.surge.toFixed(1)}x surge · Self-Learning
               </div>
             </div>
             <div className="p-4">
@@ -223,6 +225,12 @@ export const DealBriefModal: React.FC<DealBriefModalProps> = ({
                 <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5 dark:border-slate-800">
                   <dt className="text-slate-500 dark:text-slate-400">Deployment Tier</dt>
                   <dd className="font-medium text-right text-slate-900 dark:text-slate-100">{sovereigntyLabel}</dd>
+                </div>
+                <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5 dark:border-slate-800">
+                  <dt className="text-slate-500 dark:text-slate-400">Competitive Baseline</dt>
+                  <dd className="font-medium text-right text-slate-900 dark:text-slate-100">
+                    {results.competitorProfile.title} ({results.competitorProfile.examples})
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-4 border-b border-slate-100 pb-1.5 dark:border-slate-800">
                   <dt className="text-slate-500 dark:text-slate-400">Compliance Perimeter</dt>

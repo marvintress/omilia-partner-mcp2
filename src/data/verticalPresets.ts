@@ -2,6 +2,75 @@ export type VerticalKey = 'banking' | 'utilities' | 'insurance' | 'healthcare' |
 export type PartnerMotion = 'ccaas' | 'gsi' | 'bpo';
 export type SovereigntyTier = 'saas' | 'baremetal';
 export type ApiReadiness = 'modern' | 'mixed' | 'mainframe';
+export type CompetitorArchetype = 'byollm' | 'diy_hyperscaler';
+
+export interface CompetitorProfile {
+  key: CompetitorArchetype;
+  shortLabel: string;
+  title: string;
+  examples: string;
+  tableHeader: string;
+  commercialSummary: string;
+  architectureSummary: string;
+  setupRangeLabel: string;
+  timeToValueLabel: string;
+  turnLatencyLabel: string;
+  egressLabel: string;
+  ecosystemLabel: string;
+  waterfallLatencyMs: number;
+  baseVariableRate: number;
+  surgeExponent: number;
+  monthlyLicenseOrTaxBase: number;
+  maintenanceTaxLabel: string;
+  containmentLag: number;
+}
+
+export const COMPETITOR_PROFILES: Record<CompetitorArchetype, CompetitorProfile> = {
+  byollm: {
+    key: 'byollm',
+    shortLabel: 'Packaged BYOLLM',
+    title: 'Packaged BYOLLM Platform',
+    examples: 'NiCE Cognigy, Kore.ai, Parloa',
+    tableHeader: 'Packaged BYOLLM',
+    commercialSummary:
+      'Moderate upfront PS ($180K–$300K) + annual platform license + metered pass-through charges for third-party frontier LLM tokens, ASR/STT, and TTS that escalate with RAG context windows.',
+    architectureSummary:
+      'Multi-hop API chain (CCaaS → Orchestrator → External ASR → LLM → External TTS) yields 1.8s–2.8s latency, third-party data egress, and CCaaS ecosystem lock-in risk.',
+    setupRangeLabel: '$180K–$300K PS',
+    timeToValueLabel: '12–16 Weeks',
+    turnLatencyLabel: '1.8s–2.8s Multi-Hop',
+    egressLabel: 'External LLM / TTS Egress',
+    ecosystemLabel: 'CCaaS Lock-In Conflict (NiCE vs. Genesys/AWS/RC)',
+    waterfallLatencyMs: 2150,
+    baseVariableRate: 0.44,
+    surgeExponent: 1.28,
+    monthlyLicenseOrTaxBase: 14500,
+    maintenanceTaxLabel: 'Annual License + Pass-Through Token/ASR/TTS',
+    containmentLag: 0.06,
+  },
+  diy_hyperscaler: {
+    key: 'diy_hyperscaler',
+    shortLabel: 'DIY Hyperscaler Stack',
+    title: 'DIY Hyperscaler / Frontier Stack',
+    examples: 'Azure OpenAI / AWS Bedrock + Twilio / Connect',
+    tableHeader: 'DIY Hyperscaler',
+    commercialSummary:
+      'Heavy custom engineering build ($450K–$750K over 6–9 mos), 40% ongoing integration & schema-drift maintenance tax, plus raw token-burn volatility during peak call spikes.',
+    architectureSummary:
+      '2.5s–3.5s dead air risk, lacks native 8kHz telephony acoustic tuning, and requires custom engineering for PCI Level 1 masking and passive voice biometrics.',
+    setupRangeLabel: '$450K–$750K Build',
+    timeToValueLabel: '6–9 Months (24–36 Wks)',
+    turnLatencyLabel: '2.5s–3.5s Dead Air Risk',
+    egressLabel: 'Public Cloud / Frontier Egress',
+    ecosystemLabel: 'No Turnkey PCI L1 / TalkGuard Biometrics',
+    waterfallLatencyMs: 2950,
+    baseVariableRate: 0.58,
+    surgeExponent: 1.38,
+    monthlyLicenseOrTaxBase: 39900,
+    maintenanceTaxLabel: '+40% Integration & Schema-Drift Tax',
+    containmentLag: 0.11,
+  },
+};
 
 export interface RoiPreset {
   callVolume: number;

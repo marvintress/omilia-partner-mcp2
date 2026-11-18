@@ -58,12 +58,17 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
   const [isReplaying, setIsReplaying] = useState(false);
   const replayTimersRef = useRef<number[]>([]);
 
+  const comp = results.competitorProfile;
   const scenario = CALL_TURN_SCENARIOS[preset.key];
   const maxParallelMs = Math.max(...preset.mcpSystems.map((s) => s.ms));
   const lexisTtsMs = 42;
   const totalOmiliaMs = maxParallelMs + lexisTtsMs;
-  const seqSumMs = preset.mcpSystems.reduce((acc, s) => acc + s.ms, 0) + 640 + 210;
-  const scaleMax = Math.max(seqSumMs, 1500);
+  const backendSeqMs = preset.mcpSystems.reduce((acc, s) => acc + s.ms, 0);
+  const externalAsrMs = comp.key === 'byollm' ? 380 : 520;
+  const orchestratorLlmMs = comp.key === 'byollm' ? 890 : 1420;
+  const externalTtsMs = comp.key === 'byollm' ? 320 : 410;
+  const seqSumMs = externalAsrMs + orchestratorLlmMs + backendSeqMs + externalTtsMs;
+  const scaleMax = Math.max(seqSumMs, 2200);
   const thresholdPct = (1200 / scaleMax) * 100;
 
   const clearReplayTimers = () => {
@@ -156,7 +161,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
             {
               name: 'calculate_tco_and_ai_radar_report',
               description:
-                'Returns CFO Unit Economics TCO breakdown (Legacy vs. DIY Frontier LLM vs. Omilia OCP) and AI Radar 2.0 prioritization report.',
+                'Returns CFO Unit Economics TCO breakdown (Legacy vs. Packaged BYOLLM / DIY Hyperscaler vs. Omilia OCP) and AI Radar 2.0 prioritization report.',
               inputSchema: {
                 type: 'object',
                 properties: {
@@ -271,9 +276,10 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
         result: {
           vertical: preset.name,
           unitEconomicsTcoSummary: {
+            competitorBaseline: `${comp.title} (${comp.examples})`,
             annualNetSavings: formatCurrencyCompact(results.annualNetSavings),
             monthlyNetSavings: formatCurrencyCompact(results.monthlyNetSavings),
-            threeYearAdvantageVsDiyLlm: formatCurrencyCompact(results.threeYearDiySavings),
+            threeYearAdvantageVsCompetitor: formatCurrencyCompact(results.threeYearDiySavings),
             containmentLift: `+${results.containmentLiftPct}%`,
             resolvedCallsPerMonth: `${Math.round(results.omiliaAutomatedCalls).toLocaleString()} calls/mo`,
             agentDaysSavedPerMonth: `${results.daysSavedPerAgentMo.toFixed(1)} days`,
@@ -359,9 +365,9 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
 
   useEffect(() => {
     void executeRpc(activeAction, rpcId);
-    // Re-sync trace when vertical or transport bridge toggles
+    // Re-sync trace when vertical, competitor baseline, or transport bridge toggles
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset.key, useBridge]);
+  }, [preset.key, comp.key, useBridge]);
 
   const handleRunAction = (action: RpcAction) => {
     const next = rpcId + 1;
@@ -497,23 +503,32 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
                 </span>
               </div>
 
-              {/* Competitor Sequential LLM Bar */}
+              {/* Competitor Multi-Hop / Sequential Bar */}
               <div>
-                <div className="flex items-center justify-between text-xs mb-1.5">
+                <div className="flex items-center justify-between text-xs mb-1.5 gap-2">
                   <span className="font-medium text-rose-700 dark:text-rose-400">
-                    Competitor DIY Sequential LLM + API Chaining
+                    {comp.key === 'byollm'
+                      ? `${comp.shortLabel} Multi-Hop (${comp.examples})`
+                      : `${comp.shortLabel} Sequential Chain`}
                   </span>
-                  <span className="font-mono font-bold tabular-nums text-rose-700 dark:text-rose-400">
-                    {seqSumMs.toLocaleString()} ms (Dead Air Risk)
+                  <span className="font-mono font-bold tabular-nums text-rose-700 dark:text-rose-400 shrink-0">
+                    {seqSumMs.toLocaleString()} ms ({comp.turnLatencyLabel})
                   </span>
                 </div>
                 <div className="flex h-7 w-full overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
                   <div
-                    className="flex items-center justify-center bg-rose-500 text-[10px] font-mono font-semibold text-white truncate px-1"
-                    style={{ width: `${(640 / scaleMax) * 100}%` }}
-                    title="Frontier LLM Reasoning: 640ms"
+                    className="flex items-center justify-center bg-rose-700 text-[10px] font-mono font-semibold text-white truncate px-1"
+                    style={{ width: `${(externalAsrMs / scaleMax) * 100}%` }}
+                    title={`External ASR/STT: ${externalAsrMs}ms`}
                   >
-                    LLM 640ms
+                    ASR {externalAsrMs}ms
+                  </div>
+                  <div
+                    className="flex items-center justify-center bg-rose-500 text-[10px] font-mono font-semibold text-white truncate px-1"
+                    style={{ width: `${(orchestratorLlmMs / scaleMax) * 100}%` }}
+                    title={`Orchestrator + Frontier LLM: ${orchestratorLlmMs}ms`}
+                  >
+                    LLM {orchestratorLlmMs}ms
                   </div>
                   {preset.mcpSystems.map((sys) => (
                     <div
@@ -530,10 +545,10 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
                   ))}
                   <div
                     className="flex items-center justify-center bg-amber-500 text-[10px] font-mono font-semibold text-slate-950 truncate px-1"
-                    style={{ width: `${(210 / scaleMax) * 100}%` }}
-                    title="3rd-Party TTS: 210ms"
+                    style={{ width: `${(externalTtsMs / scaleMax) * 100}%` }}
+                    title={`External TTS: ${externalTtsMs}ms`}
                   >
-                    TTS 210ms
+                    TTS {externalTtsMs}ms
                   </div>
                 </div>
               </div>
@@ -591,7 +606,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
                 End-to-End Live Call Turn Replay
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {scenario.intentName} · {totalOmiliaMs}ms Omilia vs. {seqSumMs.toLocaleString()}ms DIY LLM
+                {scenario.intentName} · {totalOmiliaMs}ms Omilia vs. {seqSumMs.toLocaleString()}ms {comp.shortLabel}
               </p>
             </div>
             <button

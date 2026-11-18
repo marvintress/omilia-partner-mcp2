@@ -1,5 +1,8 @@
 import {
   ApiReadiness,
+  COMPETITOR_PROFILES,
+  CompetitorArchetype,
+  CompetitorProfile,
   DealMetadata,
   PartnerMotion,
   SovereigntyTier,
@@ -28,11 +31,13 @@ export interface RoiInputs {
 }
 
 export interface RoiResults {
+  competitorProfile: CompetitorProfile;
   unitHumanCost: number;
   effectiveMonthlyCalls: number;
   baseCont: number;
   targetCont: number;
   diyContainment: number;
+  diyPerCallVariableRate: number;
   legacyMonthlyCost: number;
   omiliaMonthlyCost: number;
   diyMonthlyCost: number;
@@ -95,7 +100,12 @@ export function computeFittedAgents(inputs: RoiInputs): number {
   return Math.max(10, Math.round(requiredProductiveHours / hoursPerAgentMonth));
 }
 
-export function calculateUnitEconomics(inputs: RoiInputs, preset: VerticalPreset): RoiResults {
+export function calculateUnitEconomics(
+  inputs: RoiInputs,
+  preset: VerticalPreset,
+  competitorArchetype: CompetitorArchetype = 'byollm'
+): RoiResults {
+  const competitorProfile = COMPETITOR_PROFILES[competitorArchetype] ?? COMPETITOR_PROFILES.byollm;
   const unitHumanCost = computeEffectiveUnitAgentCost(inputs);
   const baseCont = inputs.baseContainment / 100;
   const targetCont = Math.max(baseCont + 0.05, inputs.targetContainment / 100);
@@ -108,7 +118,7 @@ export function calculateUnitEconomics(inputs: RoiInputs, preset: VerticalPreset
   const legacyHumanCostMo = legacyHumanCalls * unitHumanCost;
   const legacyMonthlyCost = legacyHumanCostMo + legacyPlatformSpendMo;
 
-  // 2. Omilia OCP Blended Stack
+  // 2. Omilia OCP Vertically Integrated Stack (Year 1 run-rate; Self-Learning compresses Years 2 & 3)
   const omiliaAutomatedCalls = effectiveMonthlyCalls * targetCont;
   const omiliaEscalatedCalls = effectiveMonthlyCalls * (1 - targetCont);
   const tgSecSaved = inputs.talkguard ? preset.roi.talkguardSec : 0;
@@ -120,20 +130,22 @@ export function calculateUnitEconomics(inputs: RoiInputs, preset: VerticalPreset
   const omiliaHumanCostMo = omiliaEscalatedCalls * omiliaEscalatedUnitCost;
   const omiliaMonthlyCost = omiliaPlatformSpendMo + omiliaHumanCostMo;
 
-  // 3. DIY Frontier LLM Stack
-  const diyContainment = Math.max(baseCont + 0.08, targetCont - 0.11);
+  // 3. Competitor Baseline (Packaged BYOLLM or DIY Hyperscaler)
+  const diyContainment = Math.max(baseCont + 0.08, targetCont - competitorProfile.containmentLag);
   const diyAutomatedCalls = effectiveMonthlyCalls * diyContainment;
   const diyEscalatedCalls = effectiveMonthlyCalls * (1 - diyContainment);
-  const nonlinearSurgePenalty = Math.pow(inputs.surge, 1.38);
-  const diyPerCallTokenAndApi = 0.58 * nonlinearSurgePenalty;
-  const diyPlatformSpendMo = diyAutomatedCalls * diyPerCallTokenAndApi + 28500;
+  const nonlinearSurgePenalty = Math.pow(inputs.surge, competitorProfile.surgeExponent);
+  const diyPerCallVariableRate = competitorProfile.baseVariableRate * nonlinearSurgePenalty;
+  const diyPlatformSpendMo =
+    diyAutomatedCalls * diyPerCallVariableRate + competitorProfile.monthlyLicenseOrTaxBase;
   const diyHumanCostMo = diyEscalatedCalls * unitHumanCost;
   const diyMonthlyCost = diyPlatformSpendMo + diyHumanCostMo;
 
   // Net Savings & Capacity Metrics
   const monthlyNetSavings = Math.max(0, legacyMonthlyCost - omiliaMonthlyCost);
   const annualNetSavings = monthlyNetSavings * 12;
-  const threeYearDiySavings = Math.max(0, (diyMonthlyCost - omiliaMonthlyCost) * 36);
+  // Average 3-year self-learning compression factor across 36 mos: (12*1.0 + 12*0.90 + 12*0.82) / 36 = 0.9067
+  const threeYearDiySavings = Math.max(0, (diyMonthlyCost - omiliaMonthlyCost * 0.9067) * 36);
 
   const deflectedCallsMo = Math.max(0, omiliaAutomatedCalls - legacyIvrCalls);
   const deflectionHoursMo = (deflectedCallsMo * totalHandleSec) / 3600;
@@ -156,19 +168,23 @@ export function calculateUnitEconomics(inputs: RoiInputs, preset: VerticalPreset
       6500) *
     12;
   const maxAnnualDiy =
-    (maxSurgeCalls * diyContainment * (0.58 * Math.pow(maxSurge, 1.38)) +
+    (maxSurgeCalls *
+      diyContainment *
+      (competitorProfile.baseVariableRate * Math.pow(maxSurge, competitorProfile.surgeExponent)) +
       maxSurgeCalls * (1 - diyContainment) * unitHumanCost +
-      28500) *
+      competitorProfile.monthlyLicenseOrTaxBase) *
     12;
 
   const chartScaleMax = Math.max(maxAnnualLegacy, maxAnnualDiy, maxAnnualOmilia, 1);
 
   return {
+    competitorProfile,
     unitHumanCost,
     effectiveMonthlyCalls,
     baseCont,
     targetCont,
     diyContainment,
+    diyPerCallVariableRate,
     legacyMonthlyCost,
     omiliaMonthlyCost,
     diyMonthlyCost,
@@ -321,20 +337,48 @@ export interface CashFlowPoint {
 
 export interface PaybackAnalysis {
   implementationCost: number;
+  competitorSetupCost: number;
   paybackMonths: number | null;
   points: CashFlowPoint[];
   threeYearOmiliaTotal: number;
   threeYearLegacyTotal: number;
   threeYearDiyTotal: number;
+  threeYearCompetitorSavings: number;
+  omiliaUnitRatesByYear: {
+    yr1: number;
+    yr2: number;
+    yr3: number;
+  };
+}
+
+function computeOmiliaCumulativeAtMonth(month: number, monthlyCostYr1: number, setupCost: number): number {
+  const m1 = Math.min(month, 12);
+  const m2 = Math.max(0, Math.min(month, 24) - 12);
+  const m3 = Math.max(0, Math.min(month, 36) - 24);
+  return setupCost + m1 * monthlyCostYr1 * 1.0 + m2 * monthlyCostYr1 * 0.9 + m3 * monthlyCostYr1 * 0.82;
+}
+
+export function computeCompetitorSetupCost(
+  archetype: CompetitorArchetype,
+  psDays: number
+): number {
+  const effectiveDays = Math.max(0, psDays - 10);
+  if (archetype === 'byollm') {
+    // $180k–$300k moderate upfront PS build
+    return Math.min(300_000, 180_000 + effectiveDays * 4_000);
+  }
+  // $450k–$750k heavy upfront custom engineering build
+  return Math.min(750_000, 450_000 + effectiveDays * 12_000);
 }
 
 export function computePaybackAndCashFlow(
   results: RoiResults,
   psDays: number,
-  psDayRate: number
+  psDayRate: number,
+  baseOutcomeRate = 0.4
 ): PaybackAnalysis {
   const implementationCost = Math.max(0, psDays * psDayRate);
-  const diySetupCost = implementationCost * 1.45; // Custom glue & prompt engineering overhead
+  const competitorSetupCost = computeCompetitorSetupCost(results.competitorProfile.key, psDays);
   const paybackMonths =
     results.monthlyNetSavings > 0 ? implementationCost / results.monthlyNetSavings : null;
 
@@ -343,18 +387,37 @@ export function computePaybackAndCashFlow(
     points.push({
       month,
       legacyCumulative: results.legacyMonthlyCost * month,
-      diyCumulative: diySetupCost + results.diyMonthlyCost * month,
-      omiliaCumulative: implementationCost + results.omiliaMonthlyCost * month,
+      diyCumulative: competitorSetupCost + results.diyMonthlyCost * month,
+      omiliaCumulative: computeOmiliaCumulativeAtMonth(
+        month,
+        results.omiliaMonthlyCost,
+        implementationCost
+      ),
     });
   }
 
+  const threeYearLegacyTotal = results.legacyMonthlyCost * 36;
+  const threeYearDiyTotal = competitorSetupCost + results.diyMonthlyCost * 36;
+  const threeYearOmiliaTotal = computeOmiliaCumulativeAtMonth(
+    36,
+    results.omiliaMonthlyCost,
+    implementationCost
+  );
+
   return {
     implementationCost,
+    competitorSetupCost,
     paybackMonths,
     points,
-    threeYearLegacyTotal: results.legacyMonthlyCost * 36,
-    threeYearDiyTotal: diySetupCost + results.diyMonthlyCost * 36,
-    threeYearOmiliaTotal: implementationCost + results.omiliaMonthlyCost * 36,
+    threeYearLegacyTotal,
+    threeYearDiyTotal,
+    threeYearOmiliaTotal,
+    threeYearCompetitorSavings: Math.max(0, threeYearDiyTotal - threeYearOmiliaTotal),
+    omiliaUnitRatesByYear: {
+      yr1: baseOutcomeRate,
+      yr2: baseOutcomeRate * 0.9,
+      yr3: baseOutcomeRate * 0.82,
+    },
   };
 }
 
@@ -362,7 +425,7 @@ export interface SensitivityScenario {
   label: string;
   targetContainmentPct: number;
   annualNetSavings: number;
-  threeYearVsDiy: number;
+  threeYearVsCompetitor: number;
   ftesFreed: number;
   paybackMonths: number | null;
 }
@@ -371,7 +434,8 @@ export function computeSensitivityScenarios(
   inputs: RoiInputs,
   preset: VerticalPreset,
   psDays: number,
-  psDayRate: number
+  psDayRate: number,
+  competitorArchetype: CompetitorArchetype = 'byollm'
 ): SensitivityScenario[] {
   const implementationCost = Math.max(0, psDays * psDayRate);
   const conservativeTarget = Math.max(inputs.baseContainment + 5, inputs.targetContainment - 10);
@@ -385,12 +449,17 @@ export function computeSensitivityScenarios(
   ];
 
   return defs.map((d) => {
-    const res = calculateUnitEconomics({ ...inputs, targetContainment: d.target }, preset);
+    const res = calculateUnitEconomics(
+      { ...inputs, targetContainment: d.target },
+      preset,
+      competitorArchetype
+    );
+    const pb = computePaybackAndCashFlow(res, psDays, psDayRate, inputs.omiliaOutcomeRate);
     return {
       label: d.label,
       targetContainmentPct: Math.round(res.targetCont * 100),
       annualNetSavings: res.annualNetSavings,
-      threeYearVsDiy: res.threeYearDiySavings,
+      threeYearVsCompetitor: pb.threeYearCompetitorSavings,
       ftesFreed: res.ftesFreed,
       paybackMonths: res.monthlyNetSavings > 0 ? implementationCost / res.monthlyNetSavings : null,
     };
@@ -421,6 +490,7 @@ export function buildExecutiveDealBrief(params: {
     payback,
     dealMeta,
   } = params;
+  const comp = results.competitorProfile;
   const includedLines =
     includedUseCases.length > 0
       ? includedUseCases
@@ -442,13 +512,14 @@ export function buildExecutiveDealBrief(params: {
     `OMILIA ENTERPRISE CX DEAL BRIEF — ${preset.name.toUpperCase()}`,
     `================================================================`,
     ...(metaLines.length > 0 ? [metaLines.join(' | '), ``] : []),
-    `Annual Net Savings: ${formatCurrencyCompact(results.annualNetSavings)} (${formatCurrencyCompact(results.monthlyNetSavings)}/mo vs. baseline)`,
-    `3-Year TCO Advantage vs. DIY Frontier LLM: ${formatCurrencyCompact(results.threeYearDiySavings)}`,
-    `Phase 1 Implementation Cost (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/day): ${formatCurrencyFull(payback.implementationCost)}`,
+    `Competitive Baseline: Omilia Sovereign Stack vs. ${comp.title} (${comp.examples})`,
+    `Annual Net Savings vs. Legacy: ${formatCurrencyCompact(results.annualNetSavings)} (${formatCurrencyCompact(results.monthlyNetSavings)}/mo)`,
+    `3-Year TCO Advantage vs. ${comp.shortLabel}: ${formatCurrencyCompact(payback.threeYearCompetitorSavings)} (incl. Self-Learning Compression)`,
+    `Phase 1 Implementation Cost (${hlee.psDays} PS Days @ $${psDayRate.toLocaleString()}/day): ${formatCurrencyFull(payback.implementationCost)} vs. ${comp.setupRangeLabel}`,
     `Break-Even Payback Period: ${payback.paybackMonths !== null ? `${payback.paybackMonths.toFixed(1)} months` : 'N/A'}`,
     `Containment Lift: +${results.containmentLiftPct}% (${Math.round(results.omiliaAutomatedCalls).toLocaleString()} calls automated/mo)`,
     `Agent Capacity Reclaimed: ${results.daysSavedPerAgentMo.toFixed(1)} days/agent/mo (${Math.round(results.ftesFreed).toLocaleString()} FTEs freed)`,
-    `Omilia Outcome Pricing: $${inputs.omiliaOutcomeRate.toFixed(2)}/resolved | Loaded Human Cost: $${results.unitHumanCost.toFixed(2)}/call`,
+    `Omilia Outcome Pricing: $${inputs.omiliaOutcomeRate.toFixed(2)}/resolved (Yr1) → $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}/resolved (Yr3 Self-Learning) | Human Cost: $${results.unitHumanCost.toFixed(2)}/call`,
     ``,
     `INCLUDED PHASE 1 USE CASES (${includedUseCases.length} Scoped from AI Radar 2.0):`,
     includedLines,
@@ -456,10 +527,10 @@ export function buildExecutiveDealBrief(params: {
     `PARTNER SCOPING & HLEE GUARDRAILS:`,
     `- GTM Motion: ${motionLabel}`,
     `- Deployment: ${sovereigntyLabel}`,
-    `- Phase 1 Estimate: ${hlee.timelineLabel} / ${hlee.psEffortLabel}`,
+    `- Phase 1 Estimate: ${hlee.timelineLabel} / ${hlee.psEffortLabel} (95%+ Day-1 accuracy via AI Bootstrapping)`,
     `- Compliance Perimeter: ${preset.compliance.join(', ')}`,
     `- Target Backend Stack: ${preset.backendStack}`,
-    `- Architecture Guarantee: Zero Frontier Egress | <300ms Parallel MCP Dispatch | <45ms Lexis TTS`,
+    `- Architecture Guarantee: Zero Third-Party Egress (PCI L1 / FedRAMP-ready) | <1s Voice Latency (<45ms Lexis TTS) | Native TalkGuard | 100% CCaaS Neutral`,
   ].join('\n');
 }
 
@@ -483,8 +554,10 @@ export function buildDealCsv(params: {
   dealMeta: DealMetadata;
 }): string {
   const { preset, inputs, results, useCases, hlee, psDayRate, payback, sensitivity, dealMeta } = params;
+  const comp = results.competitorProfile;
   const rows: string[][] = [
     ['Omilia Partner Workbench Export', preset.name],
+    ['Competitive Comparison Baseline', `${comp.title} (${comp.examples})`],
     ['Prospect', dealMeta.prospectName || 'Unspecified'],
     ['Partner', dealMeta.partnerName || 'Unspecified'],
     ['CCaaS Platform', dealMeta.ccaasPlatform || 'Unspecified'],
@@ -495,27 +568,30 @@ export function buildDealCsv(params: {
     ['Surge Multiplier', `${inputs.surge.toFixed(1)}x`],
     ['Baseline Containment', `${inputs.baseContainment}%`],
     ['Target Omilia Containment', `${Math.round(results.targetCont * 100)}%`],
-    ['Omilia Outcome Rate (USD)', inputs.omiliaOutcomeRate.toFixed(2)],
+    ['Omilia Outcome Rate Yr1 / Yr2 / Yr3 (USD)', `$${payback.omiliaUnitRatesByYear.yr1.toFixed(2)} / $${payback.omiliaUnitRatesByYear.yr2.toFixed(2)} / $${payback.omiliaUnitRatesByYear.yr3.toFixed(2)}`],
     ['Loaded Human Cost per Call (USD)', results.unitHumanCost.toFixed(2)],
-    ['Annual Net Savings (USD)', Math.round(results.annualNetSavings).toString()],
-    ['3-Year Advantage vs DIY LLM (USD)', Math.round(results.threeYearDiySavings).toString()],
+    ['Annual Net Savings vs Legacy (USD)', Math.round(results.annualNetSavings).toString()],
+    [`3-Year TCO Advantage vs ${comp.shortLabel} (USD)`, Math.round(payback.threeYearCompetitorSavings).toString()],
     ['Phase 1 PS Effort', `${hlee.psDays} days @ $${psDayRate}/day`],
     ['Phase 1 Implementation Cost (USD)', Math.round(payback.implementationCost).toString()],
+    [`${comp.shortLabel} Upfront Build Cost (USD)`, Math.round(payback.competitorSetupCost).toString()],
     ['Break-Even Payback (Months)', payback.paybackMonths !== null ? payback.paybackMonths.toFixed(1) : 'N/A'],
     ['Equivalent FTEs Freed', Math.round(results.ftesFreed).toString()],
     [],
-    ['ANNUALIZED TCO COMPARISON', 'Legacy Baseline', 'DIY Frontier LLM', 'Omilia OCP'],
+    ['ANNUALIZED & 3-YR TCO COMPARISON', 'Legacy Baseline', comp.tableHeader, 'Omilia OCP'],
     ['Effective Containment', `${Math.round(results.baseCont * 100)}%`, `${Math.round(results.diyContainment * 100)}%`, `${Math.round(results.targetCont * 100)}%`],
-    ['Monthly Platform Spend (USD)', Math.round(results.legacyPlatformSpendMo).toString(), Math.round(results.diyPlatformSpendMo).toString(), Math.round(results.omiliaPlatformSpendMo).toString()],
-    ['Monthly Escalation Labor (USD)', Math.round(results.legacyHumanCostMo).toString(), Math.round(results.diyHumanCostMo).toString(), Math.round(results.omiliaHumanCostMo).toString()],
-    ['Annualized TCO (USD)', Math.round(results.annualLegacy).toString(), Math.round(results.annualDiy).toString(), Math.round(results.annualOmilia).toString()],
+    ['Upfront Build / PS Cost (USD)', '0', Math.round(payback.competitorSetupCost).toString(), Math.round(payback.implementationCost).toString()],
+    ['Monthly Platform & AI Spend Yr1 (USD)', Math.round(results.legacyPlatformSpendMo).toString(), Math.round(results.diyPlatformSpendMo).toString(), Math.round(results.omiliaPlatformSpendMo).toString()],
+    ['Monthly Escalation Labor Yr1 (USD)', Math.round(results.legacyHumanCostMo).toString(), Math.round(results.diyHumanCostMo).toString(), Math.round(results.omiliaHumanCostMo).toString()],
+    ['Annualized Yr1 TCO (USD)', Math.round(results.annualLegacy).toString(), Math.round(results.annualDiy).toString(), Math.round(results.annualOmilia).toString()],
+    ['3-Year Total Cumulative Spend (USD)', Math.round(payback.threeYearLegacyTotal).toString(), Math.round(payback.threeYearDiyTotal).toString(), Math.round(payback.threeYearOmiliaTotal).toString()],
     [],
-    ['CONTAINMENT SENSITIVITY', 'Target Containment', 'Annual Net Savings (USD)', '3-Year vs DIY (USD)', 'Payback (Months)', 'FTEs Freed'],
+    ['CONTAINMENT SENSITIVITY', 'Target Containment', 'Annual Net Savings (USD)', `3-Yr vs ${comp.shortLabel} (USD)`, 'Payback (Months)', 'FTEs Freed'],
     ...sensitivity.map((s) => [
       s.label,
       `${s.targetContainmentPct}%`,
       Math.round(s.annualNetSavings).toString(),
-      Math.round(s.threeYearVsDiy).toString(),
+      Math.round(s.threeYearVsCompetitor).toString(),
       s.paybackMonths !== null ? s.paybackMonths.toFixed(1) : 'N/A',
       Math.round(s.ftesFreed).toString(),
     ]),
