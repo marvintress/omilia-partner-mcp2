@@ -182,9 +182,16 @@ export const PovBlueprintTab: React.FC<PovBlueprintTabProps> = ({
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div>
-                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                  Initial POV / POC Scope Controls
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                    Initial POV / POC Scope Controls
+                  </h2>
+                  <InfoTooltip
+                    label="Initial POV / POC Scope Controls"
+                    description="Configure a tightly bounded 2–6 week validation gate using live AI Radar hero intents before committing to the full Phase 1 SOW."
+                    tcoImpact="Locks objective containment, latency, and TalkGuard exit criteria into your Executive Deal Brief, Customer Sheet, and 10-slide PowerPoint deck."
+                  />
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Bounded validation gate prior to {hlee.timelineLabel} Phase 1 SOW
                 </p>
@@ -498,7 +505,7 @@ export const PovBlueprintTab: React.FC<PovBlueprintTabProps> = ({
                       <InfoTooltip
                         label="Voice Latency SLA Gate"
                         description="Maximum allowed conversational turnaround (ASR + Dialog + Parallel MCP + <45ms Lexis TTS) well below the 1,200ms caller hang-up threshold."
-                        tcoImpact="Prevents the 1.8s–3.5s dead-air drop-off that cuts competitor effective containment by 6–11 points."
+                        tcoImpact="Prevents the 1.8s–3.5s dead-air drop-off that cuts competitor effective containment by 6–10 points (6 pts BYOLLM / 10 pts DIY)."
                       />
                     </span>
                     <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">

@@ -153,8 +153,8 @@ export const CustomerSheetModal: React.FC<CustomerSheetModalProps> = ({
                   </h3>
                   <InfoTooltip
                     label="Pre-filled vs. Blank Customer Sheet"
-                    description="Pre-fill exports your current workbench assumptions so the customer validates or adjusts them. Blank Customer Form leaves editable cells empty (keeping dropdowns and guidance) for clean greenfield discovery."
-                    tcoImpact="Captures verified customer volumes, AHT, wages, and call drivers asynchronously before modeling CFO payback."
+                    description="Pre-fill exports your current workbench assumptions (including Competitor Baseline & BYOLLM Flagship/Mini Stack Tier, POV settings, and Radar drivers) so the customer validates or adjusts them. Blank Customer Form leaves editable cells empty while keeping dropdowns and guidance."
+                    tcoImpact="Captures verified customer volumes, AHT, wages, stack tier, and call drivers asynchronously before modeling CFO payback."
                   />
                 </div>
                 <p className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -227,7 +227,7 @@ export const CustomerSheetModal: React.FC<CustomerSheetModalProps> = ({
                 </h3>
                 <InfoTooltip
                   label="Round-Trip Upload & Benchmark Fallback"
-                  description="Parses Microsoft Excel (.xlsx), Google Sheets exports, or CSV templates. Blank numeric cells automatically fall back to that sector's preset defaults, and any call drivers entered on Tab 2 update AI Radar & Phase 1 HLEE."
+                  description="Parses Microsoft Excel (.xlsx), Google Sheets exports, or CSV templates — restoring Competitor Baseline, BYOLLM Flagship/Mini tier, POV charter, and call drivers. Blank numeric cells fall back to sector preset defaults."
                   tcoImpact="Pre-populates every slider, HLEE timeline, POV charter, and PowerPoint slide in one click with a preview gate before overwriting."
                 />
               </div>

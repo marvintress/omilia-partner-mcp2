@@ -194,7 +194,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
     {
       id: 'welcome',
       role: 'assistant',
-      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 5 tabs (Unit Economics, AI Radar, POV / POC, Deal Scoping, MCP Inspector), explain every slider and metering rule (incl. 35% competitor attempt burn, build + 2-mo ramp, and Hard P&L realization), open the Customer Discovery Sheet (.xlsx/.csv), or export your Value Prop Deck (.pptx) for ${preset.shortName}.\n\nAsk any question—like "Why is Omilia break-even faster?", "Open Customer Sheet", or "Explain every control on this tab"—or switch to "Controls & Why" above.`,
+      text: `Welcome to the Omilia Partner Workbench. I can walk you through all 5 tabs (Unit Economics, AI Radar, POV / POC, Deal Scoping, MCP Inspector), explain every slider and metering rule (incl. Flagship Voice $0.46 vs. Discounted Mini $0.36 BYOLLM stack tiers, 35% competitor attempt burn, build + 2-mo ramp, and Hard P&L realization), open the Customer Discovery Sheet (.xlsx/.csv), or export your Value Prop Deck (.pptx) for ${preset.shortName}.\n\nAsk any question—like "Explain Flagship vs. Mini BYOLLM", "Open Customer Sheet", or "Explain every control on this tab"—or switch to "Controls & Why" above.`,
     },
   ]);
 
@@ -959,7 +959,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
 
     // E. Fallback: Helpful guide + quick path to Controls & Why
     return {
-      text: `I can walk you through the 5 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "How does Hard P&L Realization avoid layoffs?", "Explain color-coded break-even", "How does POV / POC work?", or "Why Dynamic Auto-Fit FTEs?") or open the Controls & Why reference tab above.`,
+      text: `I can walk you through the 5 workbench views or explain what any slider, toggle, or selector changes and why.\n\nTry asking about a specific setting (like "Explain Flagship vs. Mini BYOLLM", "How does Hard P&L Realization avoid layoffs?", "How does POV / POC work?", or "Why Dynamic Auto-Fit FTEs?") or open the Controls & Why reference tab above.`,
       actions: [
         { label: 'Start 5-Step Tour', onClick: () => runTourStep(1) },
         {
@@ -986,7 +986,7 @@ export const WorkbenchGuideWidget: React.FC<WorkbenchGuideWidgetProps> = ({
 
   const contextPrompts: Record<TabKey, string[]> = {
     economics: [
-      'Explain 35% attempt burn & break-even',
+      'Explain Flagship vs. Mini BYOLLM & 35% burn',
       'How does Hard P&L Realization avoid layoffs?',
       'Download or upload Customer Sheet (.xlsx)',
     ],

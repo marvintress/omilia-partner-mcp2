@@ -382,9 +382,16 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
           {/* Plot Custom Prospect Use Case Live */}
           <section className="no-print rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4">
-              <h3 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
-                Plot Custom Prospect Use Case Live
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                  Plot Custom Prospect Use Case Live
+                </h3>
+                <InfoTooltip
+                  label="Live Custom Discovery Plotting"
+                  description="Capture prospect-specific call drivers live during workshops and immediately score their Feasibility and Impact on the 2x2 matrix."
+                  tcoImpact="Any plotted driver scoring ≥50 Feasibility (Top-Right Immediate Funding or Bottom-Right Quick Wins) becomes immediately eligible for Hybrid Phase 1 SOW and POV scoping."
+                />
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Add client-specific call drivers during live discovery workshops
               </p>
@@ -402,7 +409,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   <InfoTooltip
                     label="Custom Use Case Name"
                     description="Adds a prospect-specific call driver to the AI Radar 2.0 portfolio during live discovery."
-                    tcoImpact="Top-Right placements immediately expand Phase 1 SOW scope and drive the containment lift behind your TCO savings."
+                    tcoImpact="High-Feasibility (≥50F: Top-Right + Bottom-Right) placements expand Phase 1 / Hybrid SOW scope and drive the containment lift behind your TCO savings."
                   />
                 </div>
                 <input
@@ -450,7 +457,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                   <InfoTooltip
                     label="Financial & CX Impact (0–100)"
                     description="Estimates inbound call-volume share, AHT savings, and customer experience upside."
-                    tcoImpact="Scores ≥50 paired with ≥50 Feasibility place the driver in Immediate Funding—unlocking TCO savings in Phase 1."
+                    tcoImpact="Scores ≥50 paired with ≥50F place the driver in Top-Right Immediate Funding; scores <50 with ≥50F qualify as Bottom-Right Quick Wins (RAG/FAQ) for Hybrid Phase 1 & POV."
                     align="right"
                   />
                 </div>
@@ -547,7 +554,7 @@ export const AiRadarTab: React.FC<AiRadarTabProps> = ({
                         Feasibility
                         <InfoTooltip
                           label="Live Feasibility Rescore"
-                          description="Move slider or drag pin horizontally. Crossing ≥50F & ≥50I moves driver into Phase 1 SOW and updates HLEE PS Days."
+                          description="Move slider or drag pin horizontally. Crossing ≥50F (Top-Right Immediate Funding or Bottom-Right Quick Wins) makes the driver eligible for Phase 1 / Hybrid SOW and updates HLEE PS Days."
                           tcoImpact="Scores ≥75F reduce delivery complexity (+2 PS Days vs. +3 PS Days for 50–74F)."
                         />
                       </span>

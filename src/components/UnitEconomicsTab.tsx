@@ -127,7 +127,9 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <span>3-Yr Savings vs. {comp.shortLabel}</span>
               <InfoTooltip
                 label="3-Year Competitor TCO Advantage"
-                description={`Cumulative 36-month TCO advantage over ${comp.title} including upfront implementation (${comp.setupRangeLabel}), latency containment gap, metered surge exposure, and Yr2–Yr3 Offline Self-Learning compression.`}
+                description={`Cumulative 36-month TCO advantage over ${
+                  isByollm ? `${comp.title} (${activeTier.label})` : comp.title
+                } including upfront implementation (${comp.setupRangeLabel}), latency containment gap, metered surge & 35% escalated attempt burn, and Yr2–Yr3 Offline Self-Learning compression.`}
                 tcoImpact="Quantifies total multi-year budget saved vs. buying an orchestrator-only or DIY hyperscaler stack."
                 placement="bottom"
               />
@@ -242,7 +244,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     <InfoTooltip
                       label="Monthly Inbound Call Volume"
                       description="Baseline monthly inbound calls entering the contact center before peak surge scaling."
-                      tcoImpact="Larger call volumes spread fixed platform costs ($6.5K/mo Omilia vs. $28.5K/mo DIY) across more calls, rapidly scaling annual net TCO savings."
+                      tcoImpact="Larger call volumes spread fixed platform costs ($6.5K/mo Omilia vs. $15K/mo BYOLLM / $34K/mo DIY) across more calls, rapidly scaling annual net TCO savings."
                     />
                   </span>
                   <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">
@@ -805,7 +807,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                 </span>
                 <InfoTooltip
                   label="Competitor Architecture Baseline"
-                  description="Compare Omilia's vertically integrated Sovereign Stack against either Packaged BYOLLM platforms (NiCE Cognigy, Kore.ai, Parloa) or custom DIY Hyperscaler stacks (Azure OpenAI / Bedrock)."
+                  description="Compare Omilia's vertically integrated Sovereign Stack against either Packaged BYOLLM platforms (NiCE Cognigy, Kore.ai, Parloa — switchable between Flagship Voice $0.46 and Discounted Mini $0.36 tiers) or custom DIY Hyperscaler stacks (Azure OpenAI / Bedrock)."
                   tcoImpact="Each baseline models upfront build costs ($180K–$300K vs. $450K–$750K), pass-through token/ASR/TTS metering across BOTH resolved and failed/escalated attempts (35% turn burn vs. Omilia $0 on unresolved escalations), and turn-latency attrition."
                 />
               </div>
@@ -874,6 +876,9 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
                     );
                   })}
                 </div>
+                <span className="print-only font-mono text-[11px] font-semibold text-amber-700">
+                  {activeTier.label}
+                </span>
               </div>
             )}
 
@@ -1303,6 +1308,7 @@ export const UnitEconomicsTab: React.FC<UnitEconomicsTabProps> = ({
               <div className="flex items-center gap-1.5">
                 <h3 className="font-display text-xs font-bold text-slate-900 dark:text-slate-50">
                   Executive CFO &amp; Partner Summary — {preset.shortName} vs. {comp.title}
+                  {isByollm ? ` (${activeTier.shortLabel})` : ''}
                 </h3>
                 <InfoTooltip
                   label="Executive CFO Summary"

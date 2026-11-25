@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BookmarkPlus, Check, FolderOpen, Link2, Trash2, X } from 'lucide-react';
 import { VERTICAL_PRESETS } from '../data/verticalPresets';
 import { SavedDealProfile } from '../utils/scenarioStorage';
+import { InfoTooltip } from './InfoTooltip';
 
 interface ScenariosModalProps {
   open: boolean;
@@ -80,11 +81,16 @@ export const ScenariosModal: React.FC<ScenariosModalProps> = ({
           {/* Shareable Link Box */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
             <div className="min-w-0">
-              <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                Share Live Scenario URL
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
+                <span>Share Live Scenario URL</span>
+                <InfoTooltip
+                  label="Shareable Scenario Link"
+                  description="Encodes your entire deal configuration—sliders, Competitor Baseline, BYOLLM Flagship/Mini tier, AI Radar pins, POV charter, and PS day rate—into a self-contained ?s= URL."
+                  tcoImpact="Lets partners and SEs open the exact same TCO business case and 10-slide deck export without needing a backend login."
+                />
               </div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Includes active {currentVerticalName} sliders, Radar pins, PS rate, and scoping choices
+                Includes active {currentVerticalName} sliders, BYOLLM tier, Radar pins, POV charter, and PS rate
               </div>
             </div>
             <button
@@ -99,12 +105,19 @@ export const ScenariosModal: React.FC<ScenariosModalProps> = ({
 
           {/* Save Current Deal Form */}
           <form onSubmit={handleSave} className="space-y-2">
-            <label
-              htmlFor="inpScenarioName"
-              className="block text-xs font-semibold text-slate-700 dark:text-slate-300"
-            >
-              Save Current State as Browser Profile
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="inpScenarioName"
+                className="block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                Save Current State as Browser Profile
+              </label>
+              <InfoTooltip
+                label="Browser Deal Profiles"
+                description="Stores named prospect snapshots locally in your browser so you can switch cleanly between active accounts."
+                tcoImpact="Preserves custom sliders, BYOLLM stack selection, Radar pin positions, and POV scope for instant recall."
+              />
+            </div>
             <div className="flex items-center gap-2">
               <input
                 id="inpScenarioName"

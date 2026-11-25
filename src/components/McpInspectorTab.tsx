@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, Code2, Copy, Play } from 'lucide-react';
 import {
   ApiReadiness,
+  BYOLLM_STACK_TIERS,
   CALL_TURN_SCENARIOS,
   PartnerMotion,
   SovereigntyTier,
@@ -279,7 +280,10 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
         result: {
           vertical: preset.name,
           unitEconomicsTcoSummary: {
-            competitorBaseline: `${comp.title} (${comp.examples})`,
+            competitorBaseline:
+              comp.key === 'byollm'
+                ? `${comp.title} · ${BYOLLM_STACK_TIERS[results.byollmStackTier].label} (${comp.examples})`
+                : `${comp.title} (${comp.examples})`,
             annualHardPnlSavings: formatCurrencyCompact(results.annualNetSavings),
             hardPnlLaborRealizationPct: `${results.laborRealizationPct}%`,
             reclaimedNonLayoffCapacityValue: `${formatCurrencyCompact(results.annualCapacityReinvestedValue)}/yr`,
@@ -374,9 +378,9 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
 
   useEffect(() => {
     void executeRpc(activeAction, rpcId);
-    // Re-sync trace when vertical, competitor baseline, or transport bridge toggles
+    // Re-sync trace when vertical, competitor baseline, BYOLLM tier, or transport bridge toggles
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset.key, comp.key, useBridge]);
+  }, [preset.key, comp.key, results.byollmStackTier, useBridge]);
 
   const handleRunAction = (action: RpcAction) => {
     const next = rpcId + 1;
@@ -505,7 +509,7 @@ export const McpInspectorTab: React.FC<McpInspectorTabProps> = ({
                   <InfoTooltip
                     label="Voice Latency Budget Waterfall"
                     description="Contrasts Omilia's Parallel Async MCP fan-out + <45ms Lexis TTS against multi-hop sequential chains (External ASR -> Frontier LLM -> APIs -> External TTS) relative to the 1,200ms caller hang-up line."
-                    tcoImpact="Eliminates the 1.8s–3.5s dead air that causes caller barge-in failures and depresses competitor containment by 6–11 points."
+                    tcoImpact="Eliminates the 1.8s–3.5s dead air that causes caller barge-in failures and depresses competitor containment by 6–10 points (6 pts BYOLLM / 10 pts DIY)."
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">

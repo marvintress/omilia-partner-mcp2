@@ -795,6 +795,10 @@ export async function downloadCustomerSpreadsheet(
       'Omilia charges a flat outcome rate per resolved call ($0 on unresolved escalations, zero token/ASR/TTS pass-through), compressing -10% Yr2 / -18% Yr3 via Self-Learning. BYOLLM & DIY stacks meter LLM/ASR/TTS across both resolved calls and ~35% failed/escalated bot attempts.',
     ],
     [
+      'BYOLLM Model & Speech Stack Tier',
+      'Switches Packaged BYOLLM (Cognigy / Kore.ai / Parloa) pass-through pricing between Flagship Voice (default: $0.46/res base, surge^0.15 — Frontier/Realtime LLM + Commercial ASR + ElevenLabs-tier Premium TTS + orchestration) and Discounted Mini ($0.36/res base, surge^0.28 — Mini/Flash LLM + Standard TTS), both plus $15K/mo license and 35% escalated attempt burn.',
+    ],
+    [
       'Legacy IVR Containment (%)',
       'Share of inbound calls currently resolved end-to-end in existing DTMF/IVR before transferring to a live agent.',
     ],
